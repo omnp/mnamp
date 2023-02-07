@@ -9,7 +9,7 @@ Additionally on Windows change the references to mnamp.so into mnamp.dll in the 
 
 Compile (GNU on Linux):
 
-g++ -Wall -shared -I /path/to/lv2 -std=c++20 .\mnamp.cc -o mnamp.so -mtune=native -O3 -Wno-unused-function -Wpedantic -fPIC
+g++ -Wall -shared -I /path/to/lv2 -std=c++20 mnamp.cc -o mnamp.so -mtune=native -O3 -Wno-unused-function -Wpedantic -fPIC
 
 Install (All platforms):
 
