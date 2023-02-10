@@ -16,3 +16,33 @@ Install (All platforms):
 Copy the plugin .so or .dll and its associated .ttl files manifest.ttl and mnamp.ttl into to an appropriately named subdirectory of wherever your local (user) lv2 plugin install directory is located.
 
 This is provided as is, and available here mostly for my own archiving purposes, so far.
+
+Some notes about the some of the current control parameters
+-----------------------------------------------------------
+
+First of all *blend* is the dry/wet mix slider (linear).
+To hear any difference from the input increase this control.
+
+Then *level* is output level multiplier (dB). Careful with this one of course.
+
+The pair of *drive 1* and *drive 2* control a post-applied-shaping-function asymmetrical multiplier.
+
+Then the pair of *drive 3* and *drive 4* control a pre-applied-shaping function asymmetrical multiplier.
+
+Those two pairs control the positive and negative part within each pair respectively.
+
+Then there are the filter controls for *high pass* and *low pass* filters used. *Cutoff* and *Q* for each filter.
+
+*Power* and *even power* control how many terms to construct for polynomials during the processing.
+
+*Mode* selects between the different implemented soft-shaping functions. You'll need to look at the code for a better explanation at the moment, sorry. But in short the functions (those currently enabled) compute the inverse of what they are called, so for example *Exponential* is the sign-of-x-times-log(absolute-value-of-x plus one), to put it mildly.
+
+*Factor* is the internal oversampling factor.
+
+*Offset* is not really an offset but input + input*offset. May remove this one in the future.
+
+*Even blend* and *even divider* are parameters for added harmonics processing the mode of which is set by the parameter named *post harmonics*.
+
+Finally,
+
+The input multiplier *gain* goes to 100 and is also in dB.
