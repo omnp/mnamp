@@ -17,7 +17,7 @@ Copy the plugin .so or .dll and its associated .ttl files manifest.ttl and mnamp
 
 This is provided as is, and available here mostly for my own archiving purposes, so far.
 
-Some notes about the some of the current control parameters
+Some notes about some of the current control parameters
 -----------------------------------------------------------
 
 First of all *blend* is the dry/wet mix slider (linear).
@@ -46,3 +46,12 @@ Then there are the filter controls for *high pass* and *low pass* filters used. 
 Finally,
 
 The input multiplier *gain* goes to 100 and is also in dB.
+
+How was it tested or how did I use it so far?
+---------------------------------------------
+
+Ardour is the DAW that has been used in testing (on Windows and Linux). This plugin was run in several instances with some Ardour-default delays, eqs, and reverbs (and possibly compressor).
+
+For example one instance of this plugin followed by a delay followed by another instance of this plugin follow by eq followed by reverb.
+
+This plugin may be a bit heavy on the cpu to run in a project above 48kHz. Most testing was done in 48k float.
