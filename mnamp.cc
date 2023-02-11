@@ -209,16 +209,16 @@ namespace mnamp {
                         u = odd(u*factor);
                         break;
                 }
-                type evnd {(1.0f - evened)*abs(u)};
+                type evnd {(1.0f - evened)*std::abs(u)};
                 switch (post) {
                     default:
                     case 0:
                         break;
                     case 2:
-                        u = (1.0f - evnd)*u + evnd * math::sgn<>(u) * evenpowers(abs(u), h, divider);
+                        u = (1.0f - evnd)*u + evnd * math::sgn<>(u) * evenpowers(std::abs(u), h, divider);
                         break;
                     case 1:
-                        u = (1.0f - evnd)*u + evnd * u * oddpowers(abs(u), k, divider);
+                        u = (1.0f - evnd)*u + evnd * u * oddpowers(std::abs(u), k, divider);
                         break;
                 }
                 amp->filter[3].process(u);
