@@ -3,7 +3,7 @@
 #include "math.h"
 
 template<typename T> inline T S(T const x) {
-    return x / (T(abs(x)) + 1.0f);
+    return x / (std::abs(x) + 1.0f);
 }
 
 template<typename T> inline T oddpowers(T const a, uint32_t const k) {
@@ -59,10 +59,10 @@ template<typename type> inline type OddPolynomial(type const x, type const c, ui
     type d = 1.0f;
     type e = 0.0f;
     type a = 0.0f;
-    while (abs(d) > 0.0f) {
+    while (std::abs(d) > 0.0f) {
         a = e*c;
         y = oddpowers(a, k);
-        d = abs(d);
+        d = std::abs(d);
         if (y > b)
             d = -d;
         else if (y < b);
@@ -82,10 +82,10 @@ template<typename type> inline type EvenPolynomial(type const x, type const c, u
     type d = 1.0f;
     type e = 0.0f;
     type a = 0.0f;
-    while (abs(d) > 0.0f) {
+    while (std::abs(d) > 0.0f) {
         a = e*c;
         y = evenpowers(a, k);
-        d = abs(d);
+        d = std::abs(d);
         if (y > b)
             d = -d;
         else if (y < b);
