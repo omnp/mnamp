@@ -17,6 +17,8 @@ Copy the plugin .so or .dll and its associated .ttl files manifest.ttl and mnamp
 
 This is provided as is, and available here mostly for my own archiving purposes, so far.
 
+There is currently only available the generic GUI controls possibly provided by the host application used.
+
 Some notes about some of the current control parameters
 -----------------------------------------------------------
 
