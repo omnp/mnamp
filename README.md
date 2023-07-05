@@ -23,4 +23,4 @@ Control parameters
 -----------------------------------------------------------
 
 There is a gain control and factor for oversampling and two drive controls to blend polynomial functions.
-
+This has been much simplified at least for the moment.
