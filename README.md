@@ -19,41 +19,8 @@ This is provided as is, and available here mostly for my own archiving purposes,
 
 There is currently only available the generic GUI controls possibly provided by the host application used.
 
-Some notes about some of the current control parameters
+Control parameters
 -----------------------------------------------------------
 
-First of all *blend* is the dry/wet mix slider (linear).
-To hear any difference from the input increase this control.
+There is a gain control and factor for oversampling and two drive controls to blend polynomial functions.
 
-Then *level* is output level multiplier (dB). Careful with this one of course.
-
-The pair of *drive 1* and *drive 2* control a post-applied-shaping-function asymmetrical multiplier.
-
-Then the pair of *drive 3* and *drive 4* control a pre-applied-shaping function asymmetrical multiplier.
-
-Those two pairs control the positive and negative part within each pair respectively.
-
-Then there are the filter controls for *high pass* and *low pass* filters used. *Cutoff* and *Q* for each filter.
-
-*Power* and *even power* control how many terms to construct for polynomials during the processing.
-
-*Mode* selects between the different implemented soft-shaping functions. You'll need to look at the code for a better explanation at the moment, sorry. But in short the functions (those currently enabled) compute the inverse of what they are called, so for example *Exponential* is the sign-of-x-times-log(absolute-value-of-x plus one), to put it mildly.
-
-*Factor* is the internal oversampling factor.
-
-*Offset* is not really an offset but input + input*offset. May remove this one in the future.
-
-*Even blend* and *even divider* are parameters for added harmonics processing the mode of which is set by the parameter named *post harmonics*.
-
-Finally,
-
-The input multiplier *gain* goes to 100 and is also in dB.
-
-How was it tested or how did I use it so far?
----------------------------------------------
-
-Ardour is the DAW that has been used in testing (on Windows and Linux). This plugin was run in several instances with some Ardour-default delays, eqs, and reverbs (and possibly compressor).
-
-For example one instance of this plugin followed by a delay followed by another instance of this plugin follow by eq followed by reverb.
-
-This plugin may be a bit heavy on the cpu to run in a project above 48kHz. Most testing was done in 48k float.
