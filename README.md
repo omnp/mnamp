@@ -24,3 +24,6 @@ Control parameters
 
 There is a gain control and factor for oversampling and two drive controls to blend polynomial functions.
 This has been much simplified at least for the moment.
+
+Now added the possibility of running multiple stages in one plugin instance, with slightly varying parameters.
+
