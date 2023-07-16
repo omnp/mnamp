@@ -1,24 +1,94 @@
 #include <lv2/core/lv2.h>
 #include "svfilter.h"
+#include "math.h"
 
 namespace mnamp {
-    const uint32_t MNAMP_N_PORTS {6u};
-    const uint32_t MAX_STAGES {4u};
+    template <typename type> struct BiQuad
+    {
+    public:
+        type delay[4] = {0.,0.,0.,0.};
+        type process(type x, type g, type b1, type b2, type a1, type a2) {
+            type y = g * x + b1 * delay[0] + b2 * delay[1] - a1 * delay[2] - a2 * delay[3];
+            delay[1] = delay[0];
+            delay[0] = x;
+            delay[3] = delay[2];
+            delay[2] = y;
+            return y;
+        }
+    };
+    template <typename type> struct BQFilter
+    {
+    public:
+        uint32_t n;
+        BiQuad<type> B[8u];
+        type lp;
+        type k;
+        type w;
+        type q;
+        type a;
+        type t;
+        type a0;
+        type a1;
+        type a2;
+        type b0;
+        type b1;
+        type b2;
+        type g;
+
+        BQFilter(uint32_t const n = 1u) : n{n > 8u ? 8u : n} {
+            k = 0.25;
+            q = .625;
+            preprocess();
+        }
+        void setk(type x) {
+            k = x;
+            preprocess();
+        }
+        void setq(type x) {
+            q = x;
+            preprocess();
+        }
+        void preprocess() {
+            w = 2.*M_PI * k;
+            a = std::sin(w) / (2.*q);
+            t = cos(w);
+            a0 = (1.+a);
+            a1 = ( -2. * t ) / a0;
+            a2 = ( 1. - a ) / a0;
+            b0 = ( (1. - t)/2. ) / a0;
+            b1 = ( 1. - t ) / a0;
+            b2 = ( (1. - t)/2. ) / a0;
+            g = b0 / a0; 
+        }
+        void process(type x) {
+            for (uint32_t i = 0; i < n; i++) {
+                x = B[i].process(x, g, b1, b2, a1, a2);
+            }
+            lp = x;
+        }
+    };
+
+    const uint32_t MNAMP_N_PORTS {9u};
+    const uint32_t MAX_STAGES {12u};
     template<typename type, typename input_type>
     struct mnamp
     /* This is the amp's structure.
     */
     {
         input_type * ports[MNAMP_N_PORTS];
-        Filter<type> filter[2u*MAX_STAGES];
+        BQFilter<type> filter[MAX_STAGES][2u];
+        Filter<type> highpass[MAX_STAGES];
         type sr;
         static enum {
             out = 0,
             in = 1,
             gain = 2,
-            factor = 3,
+            stages = 3,
             drive1 = 4,
             drive2 = 5,
+            resonance = 6,
+            factor = 7,
+            eps = 8, 
         } names;
         bool status = false;
     };
@@ -51,8 +121,11 @@ namespace mnamp {
         mnamp<type, input_type> *a = (mnamp<type, input_type> *) instance;
         if (!a) return;
 
-        for (uint32_t i = 0; i < 2u*MAX_STAGES; i++)
-            a->filter[i] = Filter<type>();
+        for (uint32_t j = 0; j < MAX_STAGES; j++)
+            for (uint32_t i = 0; i < 2u; i++)
+                a->filter[j][i] = BQFilter<type>(8u);
+        for (uint32_t j = 0; j < MAX_STAGES; j++)
+            a->highpass[j] = Filter<type>();
         a->status = false;
     }
 
@@ -70,43 +143,70 @@ namespace mnamp {
         const type gain = *amp->ports[amp->gain];
         const type drive1 = *amp->ports[amp->drive1];
         const type drive2 = *amp->ports[amp->drive2];
-        uint32_t const factor = uint32_t(*amp->ports[amp->factor]);
+        const type resonance = *amp->ports[amp->resonance];
+        const type eps = *amp->ports[amp->eps];
+        uint32_t const factor = *amp->ports[amp->factor];
+        uint32_t const stages = uint32_t(*amp->ports[amp->stages]);
+        const auto f = [](type x, type limit) {return limit * x / (1. + std::abs(x));};
         
         // Preprocessing
-        if (!amp->status) {
-            for (uint32_t i = 0; i < 2u*MAX_STAGES; ++i)
-                amp->filter[i].setparams(0.5, 1.0, 2.0);
+        const uint32_t sampling = factor;
+        for (uint32_t j = 0; j < MAX_STAGES; j++) {
+            for (uint32_t i = 0; i < 2u; i++) {
+                amp->filter[j][i].setk(0.5 / factor);
+                amp->filter[j][i].setq(resonance);
+            }
+            amp->highpass[j].setparams(0.001, 0.900, 1.0);
         }
+        
         // Post set values
-        amp->status = true;
         //
+        type buffer[sampling];
         
         // Processing loop.
         for (uint32_t i = 0; i < n; ++i) {
-            type t = x[i];
-            type b = 0.0;
-            type u = 0.0;
-            type v = 0.0;
-            type s = 0.0;
-            for (uint32_t j = 0; j < factor; j++) {
-                amp->filter[j].process(t);
-                amp->filter[j].process(0.0);
-                t = 2.0*amp->filter[j].lp;
+            out[i] = x[i];
+        }
+        for (uint32_t i = 0; i < n; ++i) {
+            for (uint32_t h = 0; h < stages; ++h) {
+                type t = out[i];
+                type b = 0.0;
+                type u = 0.0;
+                type v = 0.0;
+                type s = 0.0;
+                
+                amp->filter[h][0].process(sampling * t);
+                buffer[0] = amp->filter[h][0].lp;
+                for (uint32_t j = 1; j < sampling; j++) {
+                    amp->filter[h][0].process(0.0);
+                    buffer[j] = amp->filter[h][0].lp;
+                }
+
+                for (uint32_t j = 0; j < sampling; j++) {
+                    t = buffer[j];
+                    u = t;
+                    u = f(u, 1.);
+                    b = u;
+                    b = (1.0 + b) * 0.5;
+                    s = math::sgn<>(u);
+                    u = std::abs(u);
+                    v = drive2 * u;
+                    u = u + std::pow(u, eps + (2.*(stages-1-h)+1.0)) * (1. - u);
+                    u = drive1 * u;
+                    u = b * u + (1.0 - b) * v;
+                    u = u * s;
+                    buffer[j] = u;
+                }
+
+                for (uint32_t j = 0; j < sampling; j++) {
+                    amp->filter[h][1].process(buffer[j]);
+                    u = amp->filter[h][1].lp;
+                }
+                u = u * gain;
+                amp->highpass[h].process(u);
+                u = amp->highpass[h].hp;
+                out[i] = u;
             }
-            u = t;
-            u = u / (1.0 + std::abs(u));
-            b = (1.0 + u) * 0.5;
-            s = math::sgn<>(u);
-            u = std::abs(u);
-            v = u * s;
-            u = u + gain * u * (1 - u);
-            u = u * s;
-            u = (drive1 * b * u + drive2 * (1.0 - b) * v)/(drive1 >= drive2 ? drive1 : drive2);
-            for (uint32_t j = 0; j < factor; j++) {
-                amp->filter[MAX_STAGES+j].process(u);
-                u = amp->filter[MAX_STAGES+j].lp;
-            }
-            out[i] = u;
         }
     }
     void deactivate (LV2_Handle instance)
