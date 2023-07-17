@@ -156,7 +156,7 @@ namespace mnamp {
                 amp->filter[j][i].setk(0.5 / factor);
                 amp->filter[j][i].setq(resonance);
             }
-            amp->highpass[j].setparams(0.001, 0.900, 1.0);
+            amp->highpass[j].setparams(0.001 * (48000.0 / amp->sr), 0.900, 1.0);
         }
         
         // Post set values
@@ -190,10 +190,14 @@ namespace mnamp {
                     b = (1.0 + b) * 0.5;
                     s = math::sgn<>(u);
                     u = std::abs(u);
-                    v = drive2 * u;
-                    u = u + std::pow(u, eps + (2.*(stages-1-h)+1.0)) * (1. - u);
+                    t = u;
+                    v = u;
+                    v = v + v * (1. - v);
+                    v = drive2 * v;
+                    u = u + u*u * (1. - u);
                     u = drive1 * u;
-                    u = b * u + (1.0 - b) * v;
+                    u = (1.-eps*h/stages) * u + (eps*h/stages) * v;
+                    u = (1.-b)*t+b*u;
                     u = u * s;
                     buffer[j] = u;
                 }
