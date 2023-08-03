@@ -3,10 +3,12 @@
 
 Compilation:
 Just run make.
+
 It will give a help text explaining the possible options, when run with no arguments.
 
 If you ran make for a plugin target then the corresponding plugin is located in the build/plugin-name.lv2/ directory, ready to copied into your preferred LV2 plugin install directory (as a sub directory that is).
 Except on the Windows platform (MSYS2 / MinGW) the manifest.ttl file has to be edited by replacing the reference to plugin-name.so within it with a reference to plugin-name.dll
+
 *NOTE*: The Makefile is yet to be tested on Windows for the time being.
 
 This is provided as is, and available here mostly for my own archiving purposes, so far.
