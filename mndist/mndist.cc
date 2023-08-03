@@ -1,7 +1,7 @@
 #include <lv2/core/lv2.h>
 #include "../common/math.h"
 
-namespace mnamp {
+namespace mndist {
     #include "../common/bqfilter.h"
     #include "../common/svfilter.h"
     #include "../common/functions.h"
@@ -9,9 +9,9 @@ namespace mnamp {
     #include "../lookup/lookup.h"
     #include "../lookup/interpolate.h"
 #endif
-    
+
     template<typename type, typename io_type>
-    class mnamp
+    class mndist
     {
     private:
         struct constants {
@@ -20,28 +20,29 @@ namespace mnamp {
             struct names {
                 static const uint32_t out = 0u;
                 static const uint32_t in = 1u;
-                static const uint32_t gain = 2u;
-                static const uint32_t volume = 3u;
-                static const uint32_t stages = 4u;
-                static const uint32_t compensation = 5u;
-                static const uint32_t drive1 = 6u;
-                static const uint32_t drive2 = 7u;
-                static const uint32_t resonance = 8u;
-                static const uint32_t factor = 9u;
-                static const uint32_t eps = 10u;
-                static const uint32_t tension = 11u;
+                static const uint32_t gain1 = 2u;
+                static const uint32_t gain2 = 3u;
+                static const uint32_t toggle = 4u;
+                static const uint32_t cutoff = 5u;
+                static const uint32_t stages = 6u;
+                static const uint32_t resonance = 7u;
+                static const uint32_t factor = 8u;
+                static const uint32_t eps = 9u;
+                static const uint32_t tension = 10u;
             };
-            static const uint32_t ports = 12u;
+            static const uint32_t ports = 11u;
         };
         io_type * ports[constants::ports];
-        BQFilter<type> filter[constants::max_stages][4u];
+        BQFilter<type> filter[constants::max_stages][2u];
+        BQFilter<type> filterlp[constants::max_stages][2u];
+        Filter<type> splitter[constants::max_stages];
         Filter<type> highpass[constants::max_stages];
         BQFilter<type> gains[constants::max_stages];
         type sr;
         type buffer[constants::max_factor];
     public:
-        explicit mnamp(type rate) : sr(rate) {}
-        ~mnamp() {}
+        explicit mndist(type rate) : sr(rate) {}
+        ~mndist() {}
     private:
 #ifdef USE_LUT
         type inline G(type u, type g, type tension=1.) {
@@ -59,7 +60,7 @@ namespace mnamp {
         }
         void activate() {
             for (uint32_t j = 0; j < constants::max_stages; j++)
-                for (uint32_t i = 0; i < 4u; i++) {
+                for (uint32_t i = 0; i < 2u; i++) {
                     filter[j][i] = BQFilter<type>(8u);
                 }
             for (uint32_t j = 0; j < constants::max_stages; j++) {
@@ -71,6 +72,11 @@ namespace mnamp {
                 gains[j].setk(0.0001 * 48000.0 / sr);
                 gains[j].setq(0.625);
             }
+            for (uint32_t j = 0; j < constants::max_stages; j++)
+                for (uint32_t i = 0; i < 2u; i++) {
+                    filterlp[j][i].setk(3600.0 / sr);
+                    filterlp[j][i].setq(0.71);
+                }
         }
         void inline run(const uint32_t n) {
             for (uint32_t i = 0; i < constants::ports; ++i)
@@ -79,50 +85,42 @@ namespace mnamp {
             // Ports
             io_type * const out = ports[constants::names::out];
             const io_type * const x = ports[constants::names::in];
-            const type gain = math::dbl(*ports[constants::names::gain]);
-            const type volume = math::dbl(*ports[constants::names::volume]);
-            const type drive1 = *ports[constants::names::drive1];
-            const type drive2 = *ports[constants::names::drive2];
+            const type gain1 = *ports[constants::names::gain1];
+            const type gain2 = *ports[constants::names::gain2];
+            const uint32_t toggle = uint32_t(*ports[constants::names::toggle]);
+            const type cutoff = *ports[constants::names::cutoff];
             const type resonance = *ports[constants::names::resonance];
             const type eps = *ports[constants::names::eps];
             const type tension = *ports[constants::names::tension];
             uint32_t const factor = *ports[constants::names::factor];
             uint32_t const stages = uint32_t(*ports[constants::names::stages]);
-            const type compensation = math::dbl(*ports[constants::names::compensation]);
+            const type gain = (1-toggle)*gain1 + (toggle)*gain2;
 
-            const auto nonlin = [&eps,&drive1,&drive2,&stages](type u, uint32_t h) -> type {
-                type s = math::sgn<>(u);
-                u = std::abs(u);
-                type v = u;
-                v = v * (1. - drive2) + drive2 * (v + v * (1. - v));
-                u = u * (1. - drive1) + drive1 * (u + u*u * (1. - u));
-                u = (1.-eps*h/stages) * u + (eps*h/stages) * v;
-                u = u * s;        
-                return u;
-            };
-            
             // Preprocessing
             const uint32_t sampling = factor;
-            const uint32_t sampling4x = 4u;
             for (uint32_t j = 0; j < constants::max_stages; j++) {
                 for (uint32_t i = 0; i < 2u; i++) {
                     filter[j][i].setk(0.5 / sampling);
-                    filter[j][i].setq(resonance);
+                    filter[j][i].setq(0.625);
                 }
-                for (uint32_t i = 2u; i < 4u; i++) {
-                    filter[j][i].setk(0.5 / sampling4x);
-                    filter[j][i].setq(resonance);
-                }
+                splitter[j].setparams(cutoff / sr, resonance, 1.0);
             }
-            
+
             // Processing loop.
             for (uint32_t i = 0; i < n; ++i) {
                 out[i] = x[i];
             }
             for (uint32_t i = 0; i < n; ++i) {
                 type t = out[i];
-                t *= gain;
+                splitter[0].process(t);
+                type bass = splitter[0].lp;
+                t = splitter[0].hp;
+                
                 for (uint32_t h = 0; h < stages; ++h) {
+                    t = t * gain;
+
+                    filterlp[h][0].process(t);
+                    t = filterlp[h][0].lp;
                     filter[h][0].process(t);
                     buffer[0] = filter[h][0].lp;
                     for (uint32_t j = 1; j < sampling; j++) {
@@ -142,28 +140,13 @@ namespace mnamp {
                         filter[h][1].process(buffer[j]);
                         t = filter[h][1].lp;
                     }
-
-                    // Polynomial shaping
-                    filter[h][2].process(t);
-                    buffer[0] = filter[h][2].lp;
-                    for (uint32_t j = 1; j < sampling4x; j++) {
-                        filter[h][2].process(0.0);
-                        buffer[j] = filter[h][2].lp;
-                    }
-                    for (uint32_t j = 0; j < sampling4x; j++) {
-                        buffer[j] = nonlin(buffer[j]  * sampling4x, h);
-                    }
-                    for (uint32_t j = 0; j < sampling4x; j++) {
-                        filter[h][3].process(buffer[j]);
-                        t = filter[h][3].lp;
-                    }
-                    // End polynomial shaping
-
+                    filterlp[h][1].process(t);
+                    t = filterlp[h][1].lp;
                     highpass[h].process(t);
                     t = highpass[h].hp;
-                    t = t * compensation;
                 }
-                t *= volume;
+                
+                t = (1. - eps) * bass + eps * t;
                 out[i] = t;
             }
         }
@@ -176,14 +159,14 @@ namespace mnamp {
         const char *bundle_path,
         const LV2_Feature *const *features) 
     {
-        mnamp<type, io_type> *a = new mnamp<type, io_type>{type(rate)};
+        mndist<type, io_type> *a = new mndist<type, io_type>{type(rate)};
         return a;
     }
 
     template <typename type, typename io_type>
     void connect_port (LV2_Handle instance, const uint32_t port, void *data)
     {
-        mnamp<type, io_type> *a = (mnamp<type, io_type> *) instance;
+        mndist<type, io_type> *a = (mndist<type, io_type> *) instance;
         if (!a) return;
         a->connect_port(port, data);
     }
@@ -191,7 +174,7 @@ namespace mnamp {
     template <typename type, typename io_type>
     void activate (LV2_Handle instance)
     {
-        mnamp<type, io_type> *a = (mnamp<type, io_type> *) instance;
+        mndist<type, io_type> *a = (mndist<type, io_type> *) instance;
         if (!a) return;
         a->activate();
     }
@@ -199,7 +182,7 @@ namespace mnamp {
     template <typename type, typename io_type>
     void inline run (LV2_Handle instance, const uint32_t n)
     {
-        mnamp<type, io_type> *amp = (mnamp<type, io_type> *) instance;
+        mndist<type, io_type> *amp = (mndist<type, io_type> *) instance;
         if (!amp) return;
         amp->run(n);
     }
@@ -208,7 +191,7 @@ namespace mnamp {
     template <typename type, typename io_type>
     void cleanup (LV2_Handle instance)
     {
-        mnamp<type, io_type> *a = (mnamp<type, io_type> *) instance;
+        mndist<type, io_type> *a = (mndist<type, io_type> *) instance;
         if (!a) return;
         delete a;
     }
@@ -230,14 +213,14 @@ using io_type = float;
 
 static LV2_Descriptor const descriptor =
 {
-    .URI = "urn:omnp:mnamp",
-    .instantiate = mnamp::instantiate<processing_type, io_type>,
-    .connect_port = mnamp::connect_port<processing_type, io_type>,
-    .activate = mnamp::activate<processing_type, io_type>,
-    .run = mnamp::run<processing_type, io_type>,
-    .deactivate = mnamp::deactivate,
-    .cleanup = mnamp::cleanup<processing_type, io_type>,
-    .extension_data = mnamp::extension_data,
+    .URI = "urn:omnp:mndist",
+    .instantiate = mndist::instantiate<processing_type, io_type>,
+    .connect_port = mndist::connect_port<processing_type, io_type>,
+    .activate = mndist::activate<processing_type, io_type>,
+    .run = mndist::run<processing_type, io_type>,
+    .deactivate = mndist::deactivate,
+    .cleanup = mndist::cleanup<processing_type, io_type>,
+    .extension_data = mndist::extension_data,
 };
 
 LV2_SYMBOL_EXPORT const LV2_Descriptor *lv2_descriptor (const uint32_t index)
