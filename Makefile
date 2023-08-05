@@ -3,7 +3,7 @@ EXECUTABLE_TARGET_TYPE=#.exe
 override CXXFLAGS+= -Wno-unused-parameter -Wall -Wextra -Werror -pedantic -std=c++20
 CXX=g++#clang++
 COMMON=common/math.h common/bqfilter.h common/svfilter.h common/functions.h
-LOOKUP=lookup/lookup.h
+LOOKUP=lookup/lookup.h lookup/interpolate.h
 
 .PHONY: all
 all:
