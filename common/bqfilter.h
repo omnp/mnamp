@@ -16,11 +16,11 @@ public:
     }
 };
 
-template <typename type> struct BQFilter
+template <typename type, uint32_t N> struct BQFilter
 {
 private:
     uint32_t n;
-    BiQuad<type> B[8u];
+    BiQuad<type> B[N];
     type k;
     type w;
     type q;
@@ -46,25 +46,22 @@ private:
         g = b0 / a0; 
     }
 public:
-    type lp;
-    BQFilter(uint32_t const n = 1u) : n{n > 8u ? 8u : n} {
+    type pass;
+    BQFilter() : n{N} {
         k = 0.25;
         q = .625;
         preprocess();
     }
-    void setk(type x) {
-        k = x;
-        preprocess();
-    }
-    void setq(type x) {
-        q = x;
+    void setparams(const type k, const type q, const type sr) {
+        this->k = k / sr;
+        this->q = q;
         preprocess();
     }
     void process(type x) {
         for (uint32_t i = 0; i < n; i++) {
             x = B[i].process(x, g, b1, b2, a1, a2);
         }
-        lp = x;
+        pass = x;
     }
     void reset() {
         for (uint32_t i = 0; i < n; i++) {

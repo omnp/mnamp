@@ -42,9 +42,62 @@ public:
         this->k = tan(M_PI * k / this->sr);
         this->d = 1.0 + this->k/this->q + this->k*this->k;
     }
+    void reset() {
+        this->s1 = 0.0;
+        this->s2 = 0.0;
+        this->ap = this->bp = this->br = this->hp = this->lp = 0.0;
+    }
 private:
     type k;
     type q;
     type d;
     type sr;
+};
+
+enum filter_type {highpass, lowpass, allpass};
+template<typename type, uint32_t N>
+struct FilterCascade
+{
+public:
+    type pass;
+    filter_type function;
+
+    FilterCascade(filter_type const function = lowpass) : function(function) {}
+
+    void setparams(const type k, const type q, const type sr) {
+        for (uint32_t i = 0; i < n; i++) {
+            filters[i].setparams(k, q, sr);
+        }
+    }
+
+    void process(const type x) {
+        type s = x;
+        for (uint32_t i = 0; i < n; i++) {
+            filters[i].process(s);
+            switch (function) {
+                case allpass:
+                    s = filters[i].ap;
+                    break;
+                case highpass:
+                    s = filters[i].hp;
+                    break;
+                default:
+                case lowpass:
+                    s = filters[i].lp;
+                    break;
+            }
+        }
+        pass = s;
+    }
+
+    void reset() {
+        for (uint32_t i = 0; i < n; i++) {
+            filters[i].reset();
+        }
+        pass = 0.0;
+    }
+
+private:
+    const uint32_t n{N};
+    Filter<type> filters[N];
 };

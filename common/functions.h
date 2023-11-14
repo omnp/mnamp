@@ -2,49 +2,55 @@
 
 #include "math.h"
 
-namespace functions {
-    #include "bqfilter.h"
+#include "svfilter.h"
 
+namespace functions {
     template <typename type>
     type inline S(type x, type limit) {
         return limit * x / (1. + std::abs(x));
     }
-    template <typename type, const uint32_t internal_factor = 4u, const uint32_t iterations = 1u>
-    type inline G(const type u, const type g, const type tension=1.) {
+    template <typename type, const uint32_t internal_factor = 4u, const uint32_t iterations = 1u, typename table_type>
+    type inline G(const type g, const table_type & table) {
+        const uint32_t factor = internal_factor;
+        const type tension = 1e-6;
         uint32_t k = 0;
-        BQFilter<type> fl(8u);
-        type bf[internal_factor];
-        type const cutoff = 0.5 / internal_factor;
+        FilterCascade<type, 8u> filter0(lowpass);
+        FilterCascade<type, 8u> filter1(highpass);
+        type bf[factor];
+        type const cutoff = 0.5 / factor;
         type const Q = 0.700;
         type dlt = 0.0;
-        type r = g;
-        fl.setk(cutoff);
-        fl.setq(Q);
+        type r = 1.0;
+        filter0.setparams(cutoff, Q, 1.0);
+        filter1.setparams(cutoff, Q, 1.0);
+        filter1.function = filter_type::highpass;
         while (k < iterations) {
-            type s = 0.0;
-            fl.reset();
-            fl.process(u * r);
-            bf[0] = fl.lp * internal_factor;
-            bf[0] = S<type>(bf[0], 1.);
-            for (uint32_t i = 1u; i < internal_factor; i++) {
-                fl.process(0.0);
-                bf[i] = fl.lp * internal_factor;
-                bf[i] = S<type>(bf[i], 1.);
+            type t = 0.0;
+            filter0.reset();
+            filter1.reset();
+            for (type x: table) {
+                filter0.process(x * g * r * factor);
+                bf[0] = filter0.pass;
+                bf[0] = S<type>(bf[0], 1.);
+                for (uint32_t i = 1u; i < factor; i++) {
+                    filter0.process(0.0);
+                    bf[i] = filter0.pass;
+                    bf[i] = S<type>(bf[i], 1.);
+                }
+                for (uint32_t i = 0u; i < factor; i++) {
+                    filter1.process(bf[i]);
+                    t += std::abs(filter1.pass);
+                }
             }
-            fl.reset();
-            for (uint32_t i = 0u; i < internal_factor; i++) {
-                fl.process(bf[i]);
-                s += std::abs(std::abs(bf[i]) - std::abs(fl.lp));
-            }
-            if (std::abs(s) > tension * 1.e-3) {
-                dlt = r * .5 / (1u << k);
+            k += 1u;
+            if (std::abs(t) > tension) {
+                dlt = r / type(1u << k);
                 if (r - dlt >= 0.0)
                     r -= dlt;
             }
             else {
                 break;
             }
-            k += 1u;
         }
         return r;
     }

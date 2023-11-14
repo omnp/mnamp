@@ -2,13 +2,12 @@
 #include "../common/math.h"
 
 namespace mndist {
-    #include "../common/bqfilter.h"
     #include "../common/svfilter.h"
     #include "../common/functions.h"
-#ifdef USE_LUT
+//#ifdef USE_LUT
     #include "../lookup/lookup.h"
     #include "../lookup/interpolate.h"
-#endif
+//#endif
 
     template<typename type, typename io_type>
     class mndist
@@ -29,30 +28,28 @@ namespace mndist {
                 static const uint32_t factor = 8u;
                 static const uint32_t eps = 9u;
                 static const uint32_t tension = 10u;
+                static const uint32_t eq = 11u;
             };
-            static const uint32_t ports = 11u;
+            static const uint32_t ports = 12u;
         };
         io_type * ports[constants::ports];
-        BQFilter<type> filter[constants::max_stages][2u];
-        BQFilter<type> filterlp[constants::max_stages][2u];
+        FilterCascade<type, 1u> filter[constants::max_stages][2u];
+        FilterCascade<type, 2u> filterlp[constants::max_stages][2u];
         Filter<type> splitter[constants::max_stages];
-        Filter<type> highpass[constants::max_stages];
-        BQFilter<type> gains[constants::max_stages];
+        FilterCascade<type, 2u> highpass[constants::max_stages];
+        FilterCascade<type, 1u> gains[constants::max_stages];
         type sr;
         type buffer[constants::max_factor];
     public:
         explicit mndist(type rate) : sr(rate) {}
         ~mndist() {}
     private:
-#ifdef USE_LUT
-        type inline G(type u, type g, type tension=1.) {
-            return lookup::lookup_table<type, lookup_parameters>::lookup(u, g, tension);
+//#ifdef USE_LUT
+        type inline G(type g) {
+            return lookup::lookup_table<type, lookup_parameters>::lookup(g);
         }
-#else
-        type inline G(type u, type g, type tension=1.) {
-            return functions::G<type,4u,1u>(u, g, tension);
-        }
-#endif
+//#else
+//#endif
     public:
         void connect_port(const uint32_t port, void *data) {
             if (port < constants::ports)
@@ -61,21 +58,21 @@ namespace mndist {
         void activate() {
             for (uint32_t j = 0; j < constants::max_stages; j++)
                 for (uint32_t i = 0; i < 2u; i++) {
-                    filter[j][i] = BQFilter<type>(8u);
+                    filter[j][i].reset();
                 }
             for (uint32_t j = 0; j < constants::max_stages; j++) {
-                highpass[j] = Filter<type>();
-                highpass[j].setparams(0.001 * (48000.0 / sr), 0.900, 1.0);
+                highpass[j].function = filter_type::highpass;
+                highpass[j].reset();
+                highpass[j].setparams(70.0/sr, 0.900, 1.0);
             }
             for (uint32_t j = 0; j < constants::max_stages; j++) {
-                gains[j] = BQFilter<type>(1u);
-                gains[j].setk(0.0001 * 48000.0 / sr);
-                gains[j].setq(0.625);
+                gains[j].reset();
+                gains[j].setparams(20.0 / sr, 0.625, 1.0);
             }
             for (uint32_t j = 0; j < constants::max_stages; j++)
                 for (uint32_t i = 0; i < 2u; i++) {
-                    filterlp[j][i].setk(3600.0 / sr);
-                    filterlp[j][i].setq(0.71);
+                    filterlp[j][i].reset();
+                    filterlp[j][i].setparams(5400.0 / sr, 0.71, 1.0);
                 }
         }
         void inline run(const uint32_t n) {
@@ -85,23 +82,23 @@ namespace mndist {
             // Ports
             io_type * const out = ports[constants::names::out];
             const io_type * const x = ports[constants::names::in];
-            const type gain1 = *ports[constants::names::gain1];
-            const type gain2 = *ports[constants::names::gain2];
+            const type gain1 = math::dbl(*ports[constants::names::gain1]);
+            const type gain2 = math::dbl(*ports[constants::names::gain2]);
             const uint32_t toggle = uint32_t(*ports[constants::names::toggle]);
             const type cutoff = *ports[constants::names::cutoff];
             const type resonance = *ports[constants::names::resonance];
             const type eps = *ports[constants::names::eps];
-            const type tension = *ports[constants::names::tension];
+            //const type tension = *ports[constants::names::tension];
             uint32_t const factor = *ports[constants::names::factor];
             uint32_t const stages = uint32_t(*ports[constants::names::stages]);
             const type gain = (1-toggle)*gain1 + (toggle)*gain2;
+            const type mix = std::sqrt(*ports[constants::names::eq]);
 
             // Preprocessing
             const uint32_t sampling = factor;
             for (uint32_t j = 0; j < constants::max_stages; j++) {
                 for (uint32_t i = 0; i < 2u; i++) {
-                    filter[j][i].setk(0.5 / sampling);
-                    filter[j][i].setq(0.625);
+                    filter[j][i].setparams(0.5 / sampling, 0.625, 1.0);
                 }
                 splitter[j].setparams(cutoff / sr, resonance, 1.0);
             }
@@ -115,38 +112,38 @@ namespace mndist {
                 splitter[0].process(t);
                 type bass = splitter[0].lp;
                 t = splitter[0].hp;
+                type high = t;
                 
+                filterlp[0][0].process(t);
+                t = filterlp[0][0].pass;
                 for (uint32_t h = 0; h < stages; ++h) {
                     t = t * gain;
 
-                    filterlp[h][0].process(t);
-                    t = filterlp[h][0].lp;
                     filter[h][0].process(t);
-                    buffer[0] = filter[h][0].lp;
+                    buffer[0] = filter[h][0].pass;
                     for (uint32_t j = 1; j < sampling; j++) {
                         filter[h][0].process(0.0);
-                        buffer[j] = filter[h][0].lp;
+                        buffer[j] = filter[h][0].pass;
                     }
                     for (uint32_t j = 0; j < sampling; j++) {
-                        t = buffer[j] * sampling;
-                        gains[h].process(1.0);
-                        type g = G(t, std::abs(gains[h].lp), tension);
+                        t = buffer[j] * (sampling);
+                        type g = G(std::abs(t));
                         gains[h].process(g);
-                        g = std::abs(gains[h].lp);
+                        g = gains[h].pass;
                         t = functions::S<type>(g * t, 1.);
                         buffer[j] = t;
                     }
                     for (uint32_t j = 0; j < sampling; j++) {
                         filter[h][1].process(buffer[j]);
-                        t = filter[h][1].lp;
+                        t = filter[h][1].pass;
                     }
                     filterlp[h][1].process(t);
-                    t = filterlp[h][1].lp;
+                    t = filterlp[h][1].pass;
                     highpass[h].process(t);
-                    t = highpass[h].hp;
+                    t = highpass[h].pass;
                 }
                 
-                t = (1. - eps) * bass + eps * t;
+                t = (1. - mix) * bass + mix * ((1. - eps) * high + eps * t);
                 out[i] = t;
             }
         }

@@ -2,13 +2,12 @@
 #include "../common/math.h"
 
 namespace mnamp {
-    #include "../common/bqfilter.h"
     #include "../common/svfilter.h"
     #include "../common/functions.h"
-#ifdef USE_LUT
+//#ifdef USE_LUT
     #include "../lookup/lookup.h"
     #include "../lookup/interpolate.h"
-#endif
+//#endif
     
     template<typename type, typename io_type>
     class mnamp
@@ -34,24 +33,22 @@ namespace mnamp {
             static const uint32_t ports = 12u;
         };
         io_type * ports[constants::ports];
-        BQFilter<type> filter[constants::max_stages][4u];
-        Filter<type> highpass[constants::max_stages];
-        BQFilter<type> gains[constants::max_stages];
+        FilterCascade<type, 1u> filter[constants::max_stages][4u];
+        FilterCascade<type, 2u> filterlp[constants::max_stages][2u];
+        FilterCascade<type, 2u> highpass[constants::max_stages];
+        FilterCascade<type, 1u> gains[constants::max_stages];
         type sr;
         type buffer[constants::max_factor];
     public:
         explicit mnamp(type rate) : sr(rate) {}
         ~mnamp() {}
     private:
-#ifdef USE_LUT
-        type inline G(type u, type g, type tension=1.) {
-            return lookup::lookup_table<type, lookup_parameters>::lookup(u, g, tension);
+//#ifdef USE_LUT
+        type inline G(type g) {
+            return lookup::lookup_table<type, lookup_parameters>::lookup(g);
         }
-#else
-        type inline G(type u, type g, type tension=1.) {
-            return functions::G<type,4u,1u>(u, g, tension);
-        }
-#endif
+//#else
+//#endif
     public:
         void connect_port(const uint32_t port, void *data) {
             if (port < constants::ports)
@@ -60,17 +57,23 @@ namespace mnamp {
         void activate() {
             for (uint32_t j = 0; j < constants::max_stages; j++)
                 for (uint32_t i = 0; i < 4u; i++) {
-                    filter[j][i] = BQFilter<type>(8u);
+                    filter[j][i].reset();
+                    filter[j][i].setparams(0.25, 1.0, 1.0);
                 }
             for (uint32_t j = 0; j < constants::max_stages; j++) {
-                highpass[j] = Filter<type>();
-                highpass[j].setparams(0.001 * (48000.0 / sr), 0.900, 1.0);
+                highpass[j].function = filter_type::highpass;
+                highpass[j].reset();
+                highpass[j].setparams(70.0/sr, 0.900, 1.0);
             }
             for (uint32_t j = 0; j < constants::max_stages; j++) {
-                gains[j] = BQFilter<type>(1u);
-                gains[j].setk(0.0001 * 48000.0 / sr);
-                gains[j].setq(0.625);
+                gains[j].reset();
+                gains[j].setparams(20.0 / sr, 0.625, 1.0);
             }
+            for (uint32_t j = 0; j < constants::max_stages; j++)
+                for (uint32_t i = 0; i < 1u; i++) {
+                    filterlp[j][i].reset();
+                    filterlp[j][i].setparams(0.25/6.0, 0.71, 1.0);
+                }
         }
         void inline run(const uint32_t n) {
             for (uint32_t i = 0; i < constants::ports; ++i)
@@ -85,7 +88,7 @@ namespace mnamp {
             const type drive2 = *ports[constants::names::drive2];
             const type resonance = *ports[constants::names::resonance];
             const type eps = *ports[constants::names::eps];
-            const type tension = *ports[constants::names::tension];
+            //const type tension = *ports[constants::names::tension];
             uint32_t const factor = *ports[constants::names::factor];
             uint32_t const stages = uint32_t(*ports[constants::names::stages]);
             const type compensation = math::dbl(*ports[constants::names::compensation]);
@@ -94,75 +97,80 @@ namespace mnamp {
                 type s = math::sgn<>(u);
                 u = std::abs(u);
                 type v = u;
-                v = v * (1. - drive2) + drive2 * (v + v * (1. - v));
-                u = u * (1. - drive1) + drive1 * (u + u*u * (1. - u));
-                u = (1.-eps*h/stages) * u + (eps*h/stages) * v;
-                u = u * s;        
+                type w = u;
+                v = v * (1. - drive2) + drive2 * (v + (1. - v) * (0.25*v + 0.5*v*v));
+                u = u * (1. - drive1) + drive1 * (u + (1. - u) * (0.0625*u + 0.125*u*u + 0.25*u*u*u + 0.5*u*u*u*u));
+                u = (1.-type(h)/stages) * u + (type(h)/stages) * v;
+                u = (1. - eps) * w + eps * u;
+                u = u * s;
                 return u;
             };
             
             // Preprocessing
             const uint32_t sampling = factor;
-            const uint32_t sampling4x = 4u;
+            const uint32_t sampling4x = 8u;
             for (uint32_t j = 0; j < constants::max_stages; j++) {
                 for (uint32_t i = 0; i < 2u; i++) {
-                    filter[j][i].setk(0.5 / sampling);
-                    filter[j][i].setq(resonance);
+                    filter[j][i].setparams(0.5 / sampling, resonance, 1.0);
                 }
                 for (uint32_t i = 2u; i < 4u; i++) {
-                    filter[j][i].setk(0.5 / sampling4x);
-                    filter[j][i].setq(resonance);
+                    filter[j][i].setparams(0.5 / sampling4x, resonance, 1.0);
                 }
             }
             
             // Processing loop.
             for (uint32_t i = 0; i < n; ++i) {
-                out[i] = x[i];
-            }
-            for (uint32_t i = 0; i < n; ++i) {
-                type t = out[i];
-                t *= gain;
+                type t = x[i];
+
                 for (uint32_t h = 0; h < stages; ++h) {
+                    t *= gain;
+
+                    filterlp[h][0].process(t);
+                    t = filterlp[h][0].pass;
+                    
                     filter[h][0].process(t);
-                    buffer[0] = filter[h][0].lp;
+                    buffer[0] = filter[h][0].pass;
                     for (uint32_t j = 1; j < sampling; j++) {
                         filter[h][0].process(0.0);
-                        buffer[j] = filter[h][0].lp;
+                        buffer[j] = filter[h][0].pass;
                     }
                     for (uint32_t j = 0; j < sampling; j++) {
-                        t = buffer[j] * sampling;
-                        gains[h].process(1.0);
-                        type g = G(t, std::abs(gains[h].lp), tension);
+                        t = buffer[j] * (sampling);
+                        type g = G(std::abs(t));
                         gains[h].process(g);
-                        g = std::abs(gains[h].lp);
+                        g = gains[h].pass;
                         t = functions::S<type>(g * t, 1.);
                         buffer[j] = t;
                     }
                     for (uint32_t j = 0; j < sampling; j++) {
                         filter[h][1].process(buffer[j]);
-                        t = filter[h][1].lp;
+                        t = filter[h][1].pass;
                     }
 
                     // Polynomial shaping
                     filter[h][2].process(t);
-                    buffer[0] = filter[h][2].lp;
+                    buffer[0] = filter[h][2].pass;
                     for (uint32_t j = 1; j < sampling4x; j++) {
                         filter[h][2].process(0.0);
-                        buffer[j] = filter[h][2].lp;
+                        buffer[j] = filter[h][2].pass;
                     }
                     for (uint32_t j = 0; j < sampling4x; j++) {
-                        buffer[j] = nonlin(buffer[j]  * sampling4x, h);
+                        buffer[j] = nonlin(buffer[j]  * (sampling4x), h);
                     }
                     for (uint32_t j = 0; j < sampling4x; j++) {
                         filter[h][3].process(buffer[j]);
-                        t = filter[h][3].lp;
+                        t = filter[h][3].pass;
                     }
                     // End polynomial shaping
 
+                    filterlp[h][1].process(t);
+                    t = filterlp[h][1].pass;
+                    
                     highpass[h].process(t);
-                    t = highpass[h].hp;
+                    t = highpass[h].pass;
                     t = t * compensation;
                 }
+                
                 t *= volume;
                 out[i] = t;
             }
