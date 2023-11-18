@@ -1,13 +1,16 @@
+#include <cstdint>
 #include <lv2/core/lv2.h>
 #include "../common/math.h"
+
+#include <array>
 
 namespace mnamp {
     #include "../common/svfilter.h"
     #include "../common/functions.h"
-//#ifdef USE_LUT
+#ifdef USE_LUT
     #include "../lookup/lookup.h"
     #include "../lookup/interpolate.h"
-//#endif
+#endif
     
     template<typename type, typename io_type>
     class mnamp
@@ -33,22 +36,25 @@ namespace mnamp {
             static const uint32_t ports = 12u;
         };
         io_type * ports[constants::ports];
-        FilterCascade<type, 1u> filter[constants::max_stages][4u];
+        FilterCascade<type, 2u> filter[constants::max_stages][4u];
         FilterCascade<type, 2u> filterlp[constants::max_stages][2u];
         FilterCascade<type, 2u> highpass[constants::max_stages];
-        FilterCascade<type, 1u> gains[constants::max_stages];
+        FilterCascade<type, 2u> gains[constants::max_stages];
         type sr;
-        type buffer[constants::max_factor];
+        std::array<type, constants::max_factor> buffer {0.0};
     public:
         explicit mnamp(type rate) : sr(rate) {}
         ~mnamp() {}
     private:
-//#ifdef USE_LUT
+#ifdef USE_LUT
         type inline G(type g) {
             return lookup::lookup_table<type, lookup_parameters>::lookup(g);
         }
-//#else
-//#endif
+#else
+        type inline G(type g, const uint32_t factor = constants::max_factor, const type tension = 1e-6) {
+            return functions::G<type,8u,32u,std::array<type, constants::max_factor>>(g, buffer, factor,tension);
+        }
+#endif
     public:
         void connect_port(const uint32_t port, void *data) {
             if (port < constants::ports)
@@ -58,21 +64,21 @@ namespace mnamp {
             for (uint32_t j = 0; j < constants::max_stages; j++)
                 for (uint32_t i = 0; i < 4u; i++) {
                     filter[j][i].reset();
-                    filter[j][i].setparams(0.25, 1.0, 1.0);
+                    filter[j][i].setparams(0.25, 0.5, 1.0);
                 }
             for (uint32_t j = 0; j < constants::max_stages; j++) {
                 highpass[j].function = filter_type::highpass;
                 highpass[j].reset();
-                highpass[j].setparams(70.0/sr, 0.900, 1.0);
+                highpass[j].setparams(70.0/sr, 0.5, 1.0);
             }
             for (uint32_t j = 0; j < constants::max_stages; j++) {
                 gains[j].reset();
-                gains[j].setparams(20.0 / sr, 0.625, 1.0);
+                gains[j].setparams(20.0 / sr, 0.5, 1.0);
             }
             for (uint32_t j = 0; j < constants::max_stages; j++)
-                for (uint32_t i = 0; i < 1u; i++) {
+                for (uint32_t i = 0; i < 2u; i++) {
                     filterlp[j][i].reset();
-                    filterlp[j][i].setparams(0.25/6.0, 0.71, 1.0);
+                    filterlp[j][i].setparams(5400.0 / sr, 0.5, 1.0);
                 }
         }
         void inline run(const uint32_t n) {
@@ -88,7 +94,9 @@ namespace mnamp {
             const type drive2 = *ports[constants::names::drive2];
             const type resonance = *ports[constants::names::resonance];
             const type eps = *ports[constants::names::eps];
-            //const type tension = *ports[constants::names::tension];
+#ifndef USE_LUT
+            const type tension = *ports[constants::names::tension] * 1e-4;
+#endif
             uint32_t const factor = *ports[constants::names::factor];
             uint32_t const stages = uint32_t(*ports[constants::names::stages]);
             const type compensation = math::dbl(*ports[constants::names::compensation]);
@@ -123,25 +131,37 @@ namespace mnamp {
                 type t = x[i];
 
                 for (uint32_t h = 0; h < stages; ++h) {
-                    t *= gain;
 
                     filterlp[h][0].process(t);
                     t = filterlp[h][0].pass;
-                    
+
                     filter[h][0].process(t);
                     buffer[0] = filter[h][0].pass;
                     for (uint32_t j = 1; j < sampling; j++) {
                         filter[h][0].process(0.0);
                         buffer[j] = filter[h][0].pass;
                     }
+#ifdef USE_LUT
                     for (uint32_t j = 0; j < sampling; j++) {
                         t = buffer[j] * (sampling);
-                        type g = G(std::abs(t));
+                        type g = G(gain);
                         gains[h].process(g);
                         g = gains[h].pass;
-                        t = functions::S<type>(g * t, 1.);
+                        t = functions::S<type>(t * g * gain, 1.);
                         buffer[j] = t;
                     }
+#else
+                    for (uint32_t j = 0; j < sampling; j++) {
+                        buffer[j] = buffer[j] * (sampling);
+                    }
+                    type g = G(gain, factor, tension);
+                    gains[h].process(g);
+                    g = gains[h].pass;
+                    for (uint32_t j = 0; j < sampling; j++) {
+                        t = functions::S<type>(t * g * gain, 1.);
+                        buffer[j] = t;
+                    }
+#endif
                     for (uint32_t j = 0; j < sampling; j++) {
                         filter[h][1].process(buffer[j]);
                         t = filter[h][1].pass;
