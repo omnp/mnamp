@@ -1,4 +1,3 @@
-#include <cstdint>
 #include <lv2/core/lv2.h>
 #include "../common/math.h"
 
@@ -51,8 +50,8 @@ namespace mnamp {
             return lookup::lookup_table<type, lookup_parameters>::lookup(g);
         }
 #else
-        type inline G(type g, const uint32_t factor = constants::max_factor, const type tension = 1e-6) {
-            return functions::G<type,8u,32u,std::array<type, constants::max_factor>>(g, buffer, factor,tension);
+        type inline G(type g, const uint32_t factor = constants::max_factor, const type tension = 1e-6, type (*function)(type, type) = functions::S<type>) {
+            return functions::G<type,2u,32u,std::array<type, constants::max_factor>>(g, buffer, factor,tension,function);
         }
 #endif
     public:
@@ -117,6 +116,7 @@ namespace mnamp {
             // Preprocessing
             const uint32_t sampling = factor;
             const uint32_t sampling4x = 8u;
+            buffer = {0.0};
             for (uint32_t j = 0; j < constants::max_stages; j++) {
                 for (uint32_t i = 0; i < 2u; i++) {
                     filter[j][i].setparams(0.5 / sampling, resonance, 1.0);
@@ -135,7 +135,7 @@ namespace mnamp {
                     filterlp[h][0].process(t);
                     t = filterlp[h][0].pass;
 
-                    filter[h][0].process(t);
+                    filter[h][0].process(t * sampling);
                     buffer[0] = filter[h][0].pass;
                     for (uint32_t j = 1; j < sampling; j++) {
                         filter[h][0].process(0.0);
@@ -143,7 +143,7 @@ namespace mnamp {
                     }
 #ifdef USE_LUT
                     for (uint32_t j = 0; j < sampling; j++) {
-                        t = buffer[j] * (sampling);
+                        t = buffer[j];
                         type g = G(gain);
                         gains[h].process(g);
                         g = gains[h].pass;
@@ -151,14 +151,11 @@ namespace mnamp {
                         buffer[j] = t;
                     }
 #else
-                    for (uint32_t j = 0; j < sampling; j++) {
-                        buffer[j] = buffer[j] * (sampling);
-                    }
-                    type g = G(gain, factor, tension);
+                    type g = G(gain, factor, tension, functions::T<type>);
                     gains[h].process(g);
                     g = gains[h].pass;
                     for (uint32_t j = 0; j < sampling; j++) {
-                        t = functions::S<type>(t * g * gain, 1.);
+                        t = functions::T<type>(buffer[j] * g * gain, 1.);
                         buffer[j] = t;
                     }
 #endif

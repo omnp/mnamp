@@ -53,8 +53,9 @@ namespace mndist {
             return lookup::lookup_table<type, lookup_parameters>::lookup(g);
         }
 #else
-        type inline G(type g, const uint32_t factor = constants::max_factor, const type tension = 1e-6) {
-            return functions::G<type,8u,32u,std::array<type, constants::max_factor>>(g, buffer, factor,tension);
+        //type inline G(type g, const uint32_t factor = constants::max_factor, const type tension = 1e-6) {
+        type inline G(type g, const uint32_t factor = constants::max_factor, const type tension = 1e-6, type (*function)(type, type) = functions::S<type>) {
+            return functions::G<type,2u,32u,std::array<type, constants::max_factor>>(g, buffer, factor,tension,function);
         }
 #endif
     public:
@@ -108,6 +109,7 @@ namespace mndist {
 
             // Preprocessing
             const uint32_t sampling = factor;
+            buffer = {0.0};
             for (uint32_t j = 0; j < constants::max_stages; j++) {
                 for (uint32_t i = 0; i < 2u; i++) {
                     filter[j][i].setparams(0.5 / sampling, 0.5, 1.0);
@@ -125,7 +127,6 @@ namespace mndist {
             for (uint32_t i = 0; i < n; ++i) {
                 type t = out[i];
 
-                type w = t;
                 splitter[0].process(t);
                 type bass = splitter[0].lp;
                 t = splitter[0].hp;
@@ -136,7 +137,7 @@ namespace mndist {
 
                 for (uint32_t h = 0; h < stages; ++h) {
 
-                    filter[h][0].process(t);
+                    filter[h][0].process(t * sampling);
                     buffer[0] = filter[h][0].pass;
                     for (uint32_t j = 1; j < sampling; j++) {
                         filter[h][0].process(0.0);
@@ -144,7 +145,7 @@ namespace mndist {
                     }
 #ifdef USE_LUT
                     for (uint32_t j = 0; j < sampling; j++) {
-                        t = buffer[j] * (sampling);
+                        t = buffer[j];
                         type g = G(gain);
                         gains[h].process(g);
                         g = gains[h].pass;
@@ -152,14 +153,11 @@ namespace mndist {
                         buffer[j] = t;
                     }
 #else
-                    for (uint32_t j = 0; j < sampling; j++) {
-                        buffer[j] = buffer[j] * (sampling);
-                    }
-                    type g = G(gain, factor, tension);
+                    type g = G(gain, factor, tension, functions::T<type>);
                     gains[h].process(g);
                     g = gains[h].pass;
                     for (uint32_t j = 0; j < sampling; j++) {
-                        t = functions::S<type>(t * g * gain, 1.);
+                        t = functions::T<type>(buffer[j] * g * gain, 1.);
                         buffer[j] = t;
                     }                   
 #endif
@@ -174,8 +172,9 @@ namespace mndist {
                 
                     t = t * compensation;
                 }
-                t = (1. - mix) * w + mix * (bass + (1. - eps) * high + eps * t);
+                t = (1. - eps) * high + eps * t;
                 t = t * volume;
+                t = (1. - mix) * bass + mix*t;
                 out[i] = t;
             }
         }
