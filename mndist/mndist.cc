@@ -1,8 +1,10 @@
 #include <array>
+#include <cstdint>
 #include <lv2/core/lv2.h>
 #include "../common/math.h"
 #include "../common/svfilter.h"
 #include "../common/functions.h"
+#include "../common/resampler.h"
 
 namespace mndist {
 #ifdef USE_LUT
@@ -44,15 +46,27 @@ namespace mndist {
         using Upsample = LowpassCascade;
         using Downsample = LowpassCascade;
 
-        Lowpass filter[constants::max_stages][2u];
-        Lowpass filterlp[constants::max_stages][2u];
+        resampler<type, LowpassCascade, constants::max_factor> oversampler[constants::max_stages];
+        LowpassCascade filterlp[constants::max_stages][2u];
         SVFilter<type> splitter[constants::max_stages];
-        Highpass highpass[constants::max_stages];
-        Lowpass gains[constants::max_stages];
+        HighpassCascade highpass[constants::max_stages];
+        LowpassCascade gains[constants::max_stages];
         type sr;
-        std::array<type, constants::max_factor> buffer {0.0};
+        filter_parameters<type, LowpassCascade> oversampler_filter_parameters;
+        filter_parameters<type, LowpassCascade> lowpass_filter_parameters;
+        filter_parameters<type, HighpassCascade> highpass_filter_parameters;
+        filter_parameters<type, LowpassCascade> gains_filter_parameters;
     public:
-        explicit mndist(type rate) : sr(rate) {}
+        explicit mndist(type rate) : sr(rate) {
+            for (uint32_t i = 0; i < constants::max_stages; i++) {
+                oversampler_filter_parameters.append(oversampler[i].upsampler);
+                oversampler_filter_parameters.append(oversampler[i].downsampler);
+                lowpass_filter_parameters.append(filterlp[i][0]);
+                lowpass_filter_parameters.append(filterlp[i][1]);
+                highpass_filter_parameters.append(highpass[i]);
+                gains_filter_parameters.append(gains[i]);
+            }
+        }
         ~mndist() {}
     private:
 #ifdef USE_LUT
@@ -61,8 +75,8 @@ namespace mndist {
         }
 #else
         HighpassCascade G_filter;
-        type inline G(type g, const uint32_t factor = constants::max_factor, const type tension = 1e-6, type (*function)(type, type) = functions::S<type>) {
-            return functions::approximate<type,HighpassCascade,std::array<type, constants::max_factor>,32u>(g, G_filter, buffer, factor,tension,function);
+        type inline G(type g, std::array<type, constants::max_factor> & table, const uint32_t factor = constants::max_factor, const type tension = 1e-6, type (*function)(type, type) = functions::S<type>) {
+            return functions::approximate<type,HighpassCascade,std::array<type, constants::max_factor>,32u>(g, G_filter, table, factor,tension,function);
         }
 #endif
     public:
@@ -71,24 +85,10 @@ namespace mndist {
                 ports[port] = (io_type *) data;
         }
         void activate() {
-            for (uint32_t j = 0; j < constants::max_stages; j++)
-                for (uint32_t i = 0; i < 2u; i++) {
-                    filter[j][i].reset();
-                    filter[j][i].setparams(0.25, 0.5, 1.0);
-                }
-            for (uint32_t j = 0; j < constants::max_stages; j++) {
-                highpass[j].reset();
-                highpass[j].setparams(70.0/sr, 0.5, 1.0);
-            }
-            for (uint32_t j = 0; j < constants::max_stages; j++) {
-                gains[j].reset();
-                gains[j].setparams(2.5 / sr, 0.5, 1.0);
-            }
-            for (uint32_t j = 0; j < constants::max_stages; j++)
-                for (uint32_t i = 0; i < 2u; i++) {
-                    filterlp[j][i].reset();
-                    filterlp[j][i].setparams(5400.0 / sr, 0.5, 1.0);
-                }
+            oversampler_filter_parameters.setparams(0.25, 0.5, 1.0);
+            highpass_filter_parameters.setparams(70.0/sr, 0.5, 1.0);
+            gains_filter_parameters.setparams(2.5/sr, 0.5, 1.0);
+            lowpass_filter_parameters.setparams(5400.0 / sr, 0.5, 1.0);
         }
         void inline run(const uint32_t n) {
             for (uint32_t i = 0; i < constants::ports; ++i)
@@ -115,15 +115,11 @@ namespace mndist {
 
             // Preprocessing
             const uint32_t sampling = factor;
-            buffer = {0.0};
+            oversampler_filter_parameters.setparams(0.5 / sampling, 0.5, 1.0);
             for (uint32_t j = 0; j < constants::max_stages; j++) {
-                for (uint32_t i = 0; i < 2u; i++) {
-                    filter[j][i].setparams(0.5 / sampling, 0.5, 1.0);
-                    filterlp[j][i].setparams(5400.0 / sr, 0.5, 1.0);
-                }
-                highpass[j].setparams(70.0/sr, 0.5, 1.0);
-                gains[j].setparams(20.0 / sr, 0.5, 1.0);
                 splitter[j].setparams(cutoff / sr, resonance / (1+j), 1.0);
+                oversampler[j].upfactor = sampling;
+                oversampler[j].downfactor = sampling;
             }
 
             // Processing loop.
@@ -143,34 +139,26 @@ namespace mndist {
 
                 for (uint32_t h = 0; h < stages; ++h) {
 
-                    filter[h][0].process(t * sampling);
-                    buffer[0] = filter[h][0].pass();
-                    for (uint32_t j = 1; j < sampling; j++) {
-                        filter[h][0].process(0.0);
-                        buffer[j] = filter[h][0].pass();
-                    }
+                    oversampler[h].upsample(t * sampling);
 #ifdef USE_LUT
                     for (uint32_t j = 0; j < sampling; j++) {
-                        t = buffer[j];
+                        t = oversampler[h].buffer[j];
                         type g = G(gain);
                         gains[h].process(g);
                         g = gains[h].pass;
                         t = functions::S<type>(t * g * gain, 1.);
-                        buffer[j] = t;
+                        oversampler[h].buffer[j] = t;
                     }
 #else
-                    type g = G(gain, factor, tension, functions::T<type>);
+                    type g = G(gain, oversampler[h].buffer, factor, tension, functions::T<type>);
                     gains[h].process(g);
                     g = gains[h].pass();
                     for (uint32_t j = 0; j < sampling; j++) {
-                        t = functions::T<type>(buffer[j] * g * gain, 1.);
-                        buffer[j] = t;
+                        t = functions::T<type>(oversampler[h].buffer[j] * g * gain, 1.);
+                        oversampler[h].buffer[j] = t;
                     }                   
 #endif
-                    for (uint32_t j = 0; j < sampling; j++) {
-                        filter[h][1].process(buffer[j]);
-                        t = filter[h][1].pass();
-                    }
+                    t = oversampler[h].downsample();
                     filterlp[h][1].process(t);
                     t = filterlp[h][1].pass();
                     highpass[h].process(t);
