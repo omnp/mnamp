@@ -9,7 +9,6 @@
 #include <fstream>
 #include <ostream>
 #include <vector>
-//#include <cmath>
 
 template <typename type, uint32_t factor = 4u, uint32_t iterations = 32u, const uint32_t cascade_order = 8u, const type tension = 1e-6, typename table_type = std::vector<type>>
 struct Generator
@@ -22,27 +21,29 @@ struct Generator
     explicit Generator(uint32_t const g_steps = 64u, type const g_max = 1.) 
     : G_STEPS(g_steps),
       G_MAX(g_max) {
-        FilterCascade<type, cascade_order> filter;
+        filter_cascade<type, SVFilterAdapter<filters::lowpass, type>, cascade_order> lowpass;
+        filter_cascade<type, SVFilterAdapter<filters::highpass, type>, cascade_order> highpass;
         type const cutoff = 0.5 / factor;
         type const Q = 0.500;
-        filter.setparams(cutoff, Q, 1.0);
+        lowpass.setparams(cutoff, Q, 1.0);
+        highpass.setparams(cutoff, Q, 1.0);
         std::vector<type> table;
         type sign = 1.0;
         for (uint32_t i = 0; i < 4u/*G_STEPS*/; i++) {
             type x = sign;
-            filter.process(x);
-            x = filter.pass * factor;
+            lowpass.process(x);
+            x = lowpass.pass() * factor;
             table.push_back(x);
             for (uint32_t j = 1; j < factor; j++) {
-                filter.process(0.0);
-                table.push_back(filter.pass * factor);
+                lowpass.process(0.0);
+                table.push_back(lowpass.pass() * factor);
             }
             if ((i+1) % 2 == 0)
                 sign = -sign;
         }
         lut = new type[G_STEPS];
         for (uint32_t g = 0u; g < G_STEPS; g++) {
-            type x = functions::G<type, cascade_order, iterations, std::vector<type>>( G_MAX * type(g) / type(G_STEPS-1u), table, factor, tension);
+            type x = functions::approximate<type, filter_cascade<type, SVFilterAdapter<filters::highpass, type>, cascade_order>, std::vector<type>, iterations>( G_MAX * type(g) / type(G_STEPS-1u), highpass, table, factor, tension);
             lut[g] = x;
         }
     }

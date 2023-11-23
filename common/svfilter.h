@@ -1,9 +1,10 @@
 #pragma once
 
 #include "math.h"
+#include "filter.h"
 
 template<typename type>
-struct Filter
+struct SVFilter
 /* This is a filter implemented from the following paper:
  * "Improving the Chamberlin Digital State Variable Filter"
  * by Victor Lazzarini, Joseph Timoney
@@ -14,7 +15,7 @@ public:
     type s1,s2;
     type hp,bp,lp,br,ap;
     
-    Filter() : s1(0.0f), s2(0.0f), hp(0.0f), bp(0.0f), lp(0.0f), br(0.0f), ap(0.0f)
+    SVFilter() : s1(0.0f), s2(0.0f), hp(0.0f), bp(0.0f), lp(0.0f), br(0.0f), ap(0.0f)
     {
         setparams(1.0f, 1.0f, 2.0);
     }
@@ -54,50 +55,108 @@ private:
     type sr;
 };
 
-enum filter_type {highpass, lowpass, allpass};
-template<typename type, uint32_t N>
-struct FilterCascade
+template<filters::filter_responses filter_response, typename type> struct SVFilterAdapter : public filter_adapter<filter_response, type, SVFilterAdapter<filter_response, type>>
 {
-public:
-    type pass;
-    filter_type function;
-
-    FilterCascade(filter_type const function = lowpass) : function(function) {}
-
-    void setparams(const type k, const type q, const type sr) {
-        for (uint32_t i = 0; i < n; i++) {
-            filters[i].setparams(k, q, sr);
-        }
-    }
-
-    void process(const type x) {
-        type s = x;
-        for (uint32_t i = 0; i < n; i++) {
-            filters[i].process(s);
-            switch (function) {
-                case allpass:
-                    s = filters[i].ap;
-                    break;
-                case highpass:
-                    s = filters[i].hp;
-                    break;
-                default:
-                case lowpass:
-                    s = filters[i].lp;
-                    break;
-            }
-        }
-        pass = s;
-    }
-
-    void reset() {
-        for (uint32_t i = 0; i < n; i++) {
-            filters[i].reset();
-        }
-        pass = 0.0;
-    }
-
 private:
-    const uint32_t n{N};
-    Filter<type> filters[N];
+    explicit SVFilterAdapter() = 0;
+};
+
+template<typename type>
+struct SVFilterAdapter<filters::lowpass, type>
+{
+private:
+    SVFilter<type> svf;
+public:
+    inline type const pass() const {
+        return svf.lp;
+    }
+    inline void process(const type x) {
+        svf.process(x);
+    };
+    inline void reset() {
+        svf.reset();
+    };
+    inline void setparams(type k, type q, type sr) {
+        svf.setparams(k, q, sr);
+    };    
+};
+
+template<typename type>
+struct SVFilterAdapter<filters::highpass, type>
+{
+private:
+    SVFilter<type> svf;
+public:
+    inline type const pass() const {
+        return svf.hp;
+    }
+    inline void process(const type x) {
+        svf.process(x);
+    };
+    inline void reset() {
+        svf.reset();
+    };
+    inline void setparams(type k, type q, type sr) {
+        svf.setparams(k, q, sr);
+    };    
+};
+
+template<typename type>
+struct SVFilterAdapter<filters::bandpass, type>
+{
+private:
+    SVFilter<type> svf;
+public:
+    inline type const pass() const {
+        return svf.bp;
+    }
+    inline void process(const type x) {
+        svf.process(x);
+    };
+    inline void reset() {
+        svf.reset();
+    };
+    inline void setparams(type k, type q, type sr) {
+        svf.setparams(k, q, sr);
+    };    
+};
+
+template<typename type>
+struct SVFilterAdapter<filters::bandreject, type>
+{
+private:
+    SVFilter<type> svf;
+public:
+    inline type const pass() const {
+        return svf.br;
+    }
+    inline void process(const type x) {
+        svf.process(x);
+    };
+    inline void reset() {
+        svf.reset();
+    };
+    inline void setparams(type k, type q, type sr) {
+        svf.setparams(k, q, sr);
+    };    
+};
+
+template<typename type>
+struct SVFilterAdapter<filters::allpass, type>
+{
+private:
+    SVFilter<type> svf;
+public:
+    inline type const pass() const {
+        return svf.ap;
+    }
+    inline void process(const type x) {
+        svf.process(x);
+    };
+    inline void reset() {
+        svf.reset();
+    };
+    inline void setparams(type k, type q, type sr) {
+        svf.setparams(k, q, sr);
+    };    
 };
