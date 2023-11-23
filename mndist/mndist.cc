@@ -1,11 +1,10 @@
+#include <array>
 #include <lv2/core/lv2.h>
 #include "../common/math.h"
-
-#include <array>
+#include "../common/svfilter.h"
+#include "../common/functions.h"
 
 namespace mndist {
-    #include "../common/svfilter.h"
-    #include "../common/functions.h"
 #ifdef USE_LUT
     #include "../lookup/lookup.h"
     #include "../lookup/interpolate.h"
@@ -37,11 +36,19 @@ namespace mndist {
             static const uint32_t ports = 14u;
         };
         io_type * ports[constants::ports];
-        FilterCascade<type, 2u> filter[constants::max_stages][2u];
-        FilterCascade<type, 2u> filterlp[constants::max_stages][2u];
-        Filter<type> splitter[constants::max_stages];
-        FilterCascade<type, 2u> highpass[constants::max_stages];
-        FilterCascade<type, 2u> gains[constants::max_stages];
+
+        using Lowpass = SVFilterAdapter<filters::lowpass, type>;
+        using LowpassCascade = filter_cascade<type, Lowpass, 2u>;
+        using Highpass = SVFilterAdapter<filters::highpass, type>;
+        using HighpassCascade = filter_cascade<type, Highpass, 2u>;
+        using Upsample = LowpassCascade;
+        using Downsample = LowpassCascade;
+
+        Lowpass filter[constants::max_stages][2u];
+        Lowpass filterlp[constants::max_stages][2u];
+        SVFilter<type> splitter[constants::max_stages];
+        Highpass highpass[constants::max_stages];
+        Lowpass gains[constants::max_stages];
         type sr;
         std::array<type, constants::max_factor> buffer {0.0};
     public:
@@ -53,9 +60,9 @@ namespace mndist {
             return lookup::lookup_table<type, lookup_parameters>::lookup(g);
         }
 #else
-        //type inline G(type g, const uint32_t factor = constants::max_factor, const type tension = 1e-6) {
+        HighpassCascade G_filter;
         type inline G(type g, const uint32_t factor = constants::max_factor, const type tension = 1e-6, type (*function)(type, type) = functions::S<type>) {
-            return functions::G<type,2u,32u,std::array<type, constants::max_factor>>(g, buffer, factor,tension,function);
+            return functions::approximate<type,HighpassCascade,std::array<type, constants::max_factor>,32u>(g, G_filter, buffer, factor,tension,function);
         }
 #endif
     public:
@@ -70,7 +77,6 @@ namespace mndist {
                     filter[j][i].setparams(0.25, 0.5, 1.0);
                 }
             for (uint32_t j = 0; j < constants::max_stages; j++) {
-                highpass[j].function = filter_type::highpass;
                 highpass[j].reset();
                 highpass[j].setparams(70.0/sr, 0.5, 1.0);
             }
@@ -133,15 +139,15 @@ namespace mndist {
                 type high = t;
 
                 filterlp[0][0].process(t);
-                t = filterlp[0][0].pass;
+                t = filterlp[0][0].pass();
 
                 for (uint32_t h = 0; h < stages; ++h) {
 
                     filter[h][0].process(t * sampling);
-                    buffer[0] = filter[h][0].pass;
+                    buffer[0] = filter[h][0].pass();
                     for (uint32_t j = 1; j < sampling; j++) {
                         filter[h][0].process(0.0);
-                        buffer[j] = filter[h][0].pass;
+                        buffer[j] = filter[h][0].pass();
                     }
 #ifdef USE_LUT
                     for (uint32_t j = 0; j < sampling; j++) {
@@ -155,7 +161,7 @@ namespace mndist {
 #else
                     type g = G(gain, factor, tension, functions::T<type>);
                     gains[h].process(g);
-                    g = gains[h].pass;
+                    g = gains[h].pass();
                     for (uint32_t j = 0; j < sampling; j++) {
                         t = functions::T<type>(buffer[j] * g * gain, 1.);
                         buffer[j] = t;
@@ -163,12 +169,12 @@ namespace mndist {
 #endif
                     for (uint32_t j = 0; j < sampling; j++) {
                         filter[h][1].process(buffer[j]);
-                        t = filter[h][1].pass;
+                        t = filter[h][1].pass();
                     }
                     filterlp[h][1].process(t);
-                    t = filterlp[h][1].pass;
+                    t = filterlp[h][1].pass();
                     highpass[h].process(t);
-                    t = highpass[h].pass;
+                    t = highpass[h].pass();
                 
                     t = t * compensation;
                 }
