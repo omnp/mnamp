@@ -76,7 +76,7 @@ namespace mndist {
             }
             for (uint32_t j = 0; j < constants::max_stages; j++) {
                 gains[j].reset();
-                gains[j].setparams(20.0 / sr, 0.5, 1.0);
+                gains[j].setparams(2.5 / sr, 0.5, 1.0);
             }
             for (uint32_t j = 0; j < constants::max_stages; j++)
                 for (uint32_t i = 0; i < 2u; i++) {
@@ -98,7 +98,7 @@ namespace mndist {
             const type resonance = *ports[constants::names::resonance];
             const type eps = *ports[constants::names::eps];
 #ifndef USE_LUT
-            const type tension = *ports[constants::names::tension] * 1e-4;
+            const type tension = *ports[constants::names::tension] * 1e-6;
 #endif
             uint32_t const factor = *ports[constants::names::factor];
             uint32_t const stages = uint32_t(*ports[constants::names::stages]);
@@ -173,8 +173,8 @@ namespace mndist {
                     t = t * compensation;
                 }
                 t = (1. - eps) * high + eps * t;
-                t = t * volume;
                 t = (1. - mix) * bass + mix*t;
+                t = t * volume;
                 out[i] = t;
             }
         }

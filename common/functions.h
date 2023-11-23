@@ -17,7 +17,7 @@ namespace functions {
     type inline G(const type g, const table_type & table, const uint32_t factor, const type tension = 1e-6, type (*S)(type, type) = functions::S<type>) {
         uint32_t k = 0;
         FilterCascade<type, cascade_order> filter1(highpass);
-        type const cutoff = 0.5 / factor;
+        type const cutoff = 0.25;
         type const Q = 0.500;
         type dlt = 0.0;
         type r = 1.0;
@@ -32,7 +32,7 @@ namespace functions {
                 t += std::abs(filter1.pass);
             }
             k += 1u;
-            if (std::abs(t)/factor > tension) {
+            if (std::abs(t) > tension) {
                 dlt = 1.0 / type(1u << k);
                 if (r - dlt >= 0.0)
                     r -= dlt;
