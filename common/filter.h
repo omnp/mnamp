@@ -8,6 +8,22 @@ namespace filters
     enum filter_responses {highpass, lowpass, bandpass, bandreject, allpass};
 }
 
+template <typename type> class averaging
+{
+public:
+    inline type const pass() const {
+        return state;
+    }
+    inline void process(const type x) {
+        state = 0.5 * (state + x);
+    }
+    inline void reset() {
+        state = 0.0;
+    }
+private:
+    type state{0.0};
+};
+
 template <typename type, typename filter_concrete> class filter_parameters;
 
 template <typename type, class deriving> class filter

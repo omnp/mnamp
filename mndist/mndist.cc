@@ -35,8 +35,52 @@ namespace mndist {
                 static const uint32_t volume = 13u;
             };
             static const uint32_t ports = 14u;
+            enum struct conversion {none = 0u, linear = 1u, db = 2u};
         };
         io_type * ports[constants::ports];
+
+        inline io_type * port(uint32_t name) const {
+            return ports[name];
+        }
+
+        template <uint32_t name = constants::ports, typename return_type = type, const typename constants::conversion c = constants::conversion::linear>
+        struct port_parameter {
+            explicit port_parameter(mndist const * m) : m{m} {
+            }
+            mndist const * m;
+            uint32_t const index = name;
+            averaging<type> input_filter;
+            return_type operator()() {
+                type in = *m->port(name);
+                switch (c) {
+                    case constants::conversion::db:
+                        in = math::dbl(in);
+                        input_filter.process(in);
+                        in = input_filter.pass();
+                        break;
+                    case constants::conversion::linear:
+                        input_filter.process(in);
+                        in = input_filter.pass();
+                        break;
+                    default:
+                        break;
+                }
+                return in;
+            }
+        };
+
+        port_parameter<constants::names::gain1, type, constants::conversion::db> gain1{this};
+        port_parameter<constants::names::gain2, type, constants::conversion::db> gain2{this};
+        port_parameter<constants::names::toggle, uint32_t, constants::conversion::none> toggle{this};
+        port_parameter<constants::names::cutoff> cutoff{this};
+        port_parameter<constants::names::stages, uint32_t, constants::conversion::none> stages{this};
+        port_parameter<constants::names::resonance> resonance{this};
+        port_parameter<constants::names::factor, uint32_t, constants::conversion::none> factor{this};
+        port_parameter<constants::names::eps> eps{this};
+        port_parameter<constants::names::tension> tension{this};
+        port_parameter<constants::names::eq> eq{this};
+        port_parameter<constants::names::compensation, type, constants::conversion::db> compensation{this};
+        port_parameter<constants::names::volume, type, constants::conversion::db> volume{this};
 
         using Lowpass = SVFilterAdapter<filters::lowpass, type>;
         using LowpassCascade = filter_cascade<type, Lowpass, 2u>;
@@ -96,21 +140,21 @@ namespace mndist {
             // Ports
             io_type * const out = ports[constants::names::out];
             const io_type * const x = ports[constants::names::in];
-            const type gain1 = math::dbl(*ports[constants::names::gain1]);
-            const type gain2 = math::dbl(*ports[constants::names::gain2]);
-            const uint32_t toggle = uint32_t(*ports[constants::names::toggle]);
-            const type cutoff = *ports[constants::names::cutoff];
-            const type resonance = *ports[constants::names::resonance];
-            const type eps = *ports[constants::names::eps];
+            const type gain1 = this->gain1();
+            const type gain2 = this->gain2();
+            const uint32_t toggle = this->toggle();
+            const type cutoff = this->cutoff();
+            const type resonance = this->resonance();
+            const type eps = this->eps();
 #ifndef USE_LUT
-            const type tension = *ports[constants::names::tension] * 1e-6;
+            const type tension = this->tension() * 1e-6;
 #endif
-            uint32_t const factor = *ports[constants::names::factor];
-            uint32_t const stages = uint32_t(*ports[constants::names::stages]);
+            uint32_t const factor = this->factor();
+            uint32_t const stages = this->stages();
             const type gain = (1-toggle)*gain1 + (toggle)*gain2;
-            const type mix = std::sqrt(*ports[constants::names::eq]);
-            const type compensation = math::dbl(*ports[constants::names::compensation]);
-            const type volume = math::dbl(*ports[constants::names::volume]);
+            const type mix = this->eq();
+            const type compensation = this->compensation();
+            const type volume = this->volume();
 
             // Preprocessing
             const uint32_t sampling = factor;
