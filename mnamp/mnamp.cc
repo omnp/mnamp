@@ -69,6 +69,18 @@ namespace mnamp {
         }
         ~mnamp() {}
     private:
+        type inline poly(type u, const uint32_t & h, const type & eps, const type & drive1, const type & drive2, const uint32_t & stages) {
+            type s = math::sgn<>(u);
+            u = std::abs(u);
+            type v = u;
+            type w = u;
+            v = v * (1. - drive2) + drive2 * (v + (1. - v) * (0.25*v + 0.5*v*v));
+            u = u * (1. - drive1) + drive1 * (u + (1. - u) * (0.0625*u + 0.125*u*u + 0.25*u*u*u + 0.5*u*u*u*u));
+            u = (1.-type(h)/stages) * u + (type(h)/stages) * v;
+            u = (1. - eps) * w + eps * u;
+            u = u * s;
+            return u;
+        };
 #ifdef USE_LUT
         type inline G(type g) {
             return lookup::lookup_table<type, lookup_parameters>::lookup(g);
@@ -89,7 +101,7 @@ namespace mnamp {
             oversampler_poly_filter_parameters.setparams(0.25, 0.5, 1.0);
             highpass_filter_parameters.setparams(70.0/sr, 0.5, 1.0);
             gains_filter_parameters.setparams(2.5/sr, 0.5, 1.0);
-            lowpass_filter_parameters.setparams(5400/sr, 0.5, 1.0);
+            lowpass_filter_parameters.setparams(16200.0/sr, 0.5, 1.0);
         }
         void inline run(const uint32_t n) {
             for (uint32_t i = 0; i < constants::ports; ++i)
@@ -111,19 +123,6 @@ namespace mnamp {
             uint32_t const stages = uint32_t(*ports[constants::names::stages]);
             const type compensation = math::dbl(*ports[constants::names::compensation]);
 
-            const auto poly = [&eps,&drive1,&drive2,&stages](type u, uint32_t h) -> type {
-                type s = math::sgn<>(u);
-                u = std::abs(u);
-                type v = u;
-                type w = u;
-                v = v * (1. - drive2) + drive2 * (v + (1. - v) * (0.25*v + 0.5*v*v));
-                u = u * (1. - drive1) + drive1 * (u + (1. - u) * (0.0625*u + 0.125*u*u + 0.25*u*u*u + 0.5*u*u*u*u));
-                u = (1.-type(h)/stages) * u + (type(h)/stages) * v;
-                u = (1. - eps) * w + eps * u;
-                u = u * s;
-                return u;
-            };
-            
             // Preprocessing
             const uint32_t sampling = factor;
             const uint32_t sampling4x = 8u;
@@ -169,7 +168,7 @@ namespace mnamp {
                     // Polynomial shaping
                     oversampler_poly[h].upsample(t * sampling4x);
                     for (uint32_t j = 0; j < sampling4x; j++) {
-                        oversampler_poly[h].buffer[j] = poly(oversampler_poly[h].buffer[j], h);
+                        oversampler_poly[h].buffer[j] = poly(oversampler_poly[h].buffer[j], h, eps, drive1, drive2, stages);
                     }
                     t = oversampler_poly[h].downsample();
                     // End polynomial shaping

@@ -1,5 +1,4 @@
 #include <array>
-#include <cstdint>
 #include <lv2/core/lv2.h>
 #include "../common/math.h"
 #include "../common/svfilter.h"
