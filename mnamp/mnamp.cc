@@ -10,7 +10,7 @@ namespace mnamp {
     #include "../lookup/lookup.h"
     #include "../lookup/interpolate.h"
 #endif
-    
+
     template<typename type, typename io_type>
     class mnamp
     {
@@ -21,20 +21,70 @@ namespace mnamp {
             struct names {
                 static const uint32_t out = 0u;
                 static const uint32_t in = 1u;
-                static const uint32_t gain = 2u;
-                static const uint32_t volume = 3u;
-                static const uint32_t stages = 4u;
-                static const uint32_t compensation = 5u;
-                static const uint32_t drive1 = 6u;
-                static const uint32_t drive2 = 7u;
-                static const uint32_t resonance = 8u;
-                static const uint32_t factor = 9u;
-                static const uint32_t eps = 10u;
-                static const uint32_t tension = 11u;
+                static const uint32_t gain1 = 2u;
+                static const uint32_t gain2 = 3u;
+                static const uint32_t toggle = 4u;
+                static const uint32_t cutoff = 5u;
+                static const uint32_t stages = 6u;
+                static const uint32_t drive1 = 7u;
+                static const uint32_t drive2 = 8u;
+                static const uint32_t resonance = 9u;
+                static const uint32_t factor = 10u;
+                static const uint32_t eps = 11u;
+                static const uint32_t tension = 12u;
+                static const uint32_t eq = 13u;
+                static const uint32_t compensation = 14u;
+                static const uint32_t volume = 15u;
             };
-            static const uint32_t ports = 12u;
+            static const uint32_t ports = 16u;
+            enum struct conversion {none = 0u, linear = 1u, db = 2u};
         };
         io_type * ports[constants::ports];
+
+        inline io_type * port(uint32_t name) const {
+            return ports[name];
+        }
+
+        template <uint32_t name = constants::ports, typename return_type = type, const typename constants::conversion c = constants::conversion::linear>
+        struct port_parameter {
+            explicit port_parameter(mnamp const * m) : m{m} {
+            }
+            mnamp const * m;
+            uint32_t const index = name;
+            averaging<type> input_filter;
+            return_type operator()() {
+                type in = *m->port(name);
+                switch (c) {
+                    case constants::conversion::db:
+                        in = math::dbl(in);
+                        input_filter.process(in);
+                        in = input_filter.pass();
+                        break;
+                    case constants::conversion::linear:
+                        input_filter.process(in);
+                        in = input_filter.pass();
+                        break;
+                    default:
+                        break;
+                }
+                return in;
+            }
+        };
+
+        port_parameter<constants::names::gain1, type, constants::conversion::db> gain1{this};
+        port_parameter<constants::names::gain2, type, constants::conversion::db> gain2{this};
+        port_parameter<constants::names::toggle, uint32_t, constants::conversion::none> toggle{this};
+        port_parameter<constants::names::cutoff> cutoff{this};
+        port_parameter<constants::names::stages, uint32_t, constants::conversion::none> stages{this};
+        port_parameter<constants::names::drive1> drive1{this};
+        port_parameter<constants::names::drive2> drive2{this};
+        port_parameter<constants::names::resonance> resonance{this};
+        port_parameter<constants::names::factor, uint32_t, constants::conversion::none> factor{this};
+        port_parameter<constants::names::eps> eps{this};
+        port_parameter<constants::names::tension> tension{this};
+        port_parameter<constants::names::eq> eq{this};
+        port_parameter<constants::names::compensation, type, constants::conversion::db> compensation{this};
+        port_parameter<constants::names::volume, type, constants::conversion::db> volume{this};
 
         using Lowpass = SVFilterAdapter<filters::lowpass, type>;
         using LowpassCascade = filter_cascade<type, Lowpass, 2u>;
@@ -46,6 +96,7 @@ namespace mnamp {
         resampler<type, LowpassCascade, constants::max_factor> oversampler[constants::max_stages];
         resampler<type, LowpassCascade, constants::max_factor> oversampler_poly[constants::max_stages];
         LowpassCascade filterlp[constants::max_stages][2u];
+        SVFilter<type> splitter[constants::max_stages];
         HighpassCascade highpass[constants::max_stages];
         LowpassCascade gains[constants::max_stages];
         type sr;
@@ -88,7 +139,7 @@ namespace mnamp {
 #else
         HighpassCascade G_filter;
         type inline G(type g, std::array<type, constants::max_factor> & table, const uint32_t factor = constants::max_factor, const type tension = 1e-6, type (*function)(type, type) = functions::S<type>) {
-            return functions::approximate<type,HighpassCascade,std::array<type, constants::max_factor>, 32u>(g, G_filter, table, factor,tension,function);
+            return functions::approximate<type,HighpassCascade,std::array<type, constants::max_factor>,32u>(g, G_filter, table, factor,tension,function);
         }
 #endif
     public:
@@ -110,39 +161,50 @@ namespace mnamp {
             // Ports
             io_type * const out = ports[constants::names::out];
             const io_type * const x = ports[constants::names::in];
-            const type gain = math::dbl(*ports[constants::names::gain]);
-            const type volume = math::dbl(*ports[constants::names::volume]);
-            const type drive1 = *ports[constants::names::drive1];
-            const type drive2 = *ports[constants::names::drive2];
-            const type resonance = *ports[constants::names::resonance];
-            const type eps = *ports[constants::names::eps];
+            const type gain1 = this->gain1();
+            const type gain2 = this->gain2();
+            const uint32_t toggle = this->toggle();
+            const type cutoff = this->cutoff();
+            const type drive1 = this->drive1();
+            const type drive2 = this->drive2();
+            const type resonance = this->resonance();
+            const type eps = this->eps();
 #ifndef USE_LUT
-            const type tension = *ports[constants::names::tension] * 1e-6;
+            const type tension = this->tension() * 1e-6;
 #endif
-            uint32_t const factor = *ports[constants::names::factor];
-            uint32_t const stages = uint32_t(*ports[constants::names::stages]);
-            const type compensation = math::dbl(*ports[constants::names::compensation]);
+            uint32_t const factor = this->factor();
+            uint32_t const stages = this->stages();
+            const type gain = (1-toggle)*gain1 + (toggle)*gain2;
+            const type mix = this->eq();
+            const type compensation = this->compensation();
+            const type volume = this->volume();
 
             // Preprocessing
             const uint32_t sampling = factor;
             const uint32_t sampling4x = 8u;
-            oversampler_filter_parameters.setparams(0.5 / sampling, resonance, 1.0);
-            oversampler_poly_filter_parameters.setparams(0.5 / sampling4x, resonance, 1.0);
+            oversampler_filter_parameters.setparams(0.5 / sampling, 0.5, 1.0);
+            oversampler_poly_filter_parameters.setparams(0.5 / sampling4x, 0.5, 1.0);
             for (uint32_t j = 0; j < constants::max_stages; j++) {
+                splitter[j].setparams(cutoff / sr, resonance / (1+j), 1.0);
                 oversampler[j].upfactor = sampling;
                 oversampler[j].downfactor = sampling;
                 oversampler_poly[j].upfactor = sampling4x;
                 oversampler_poly[j].downfactor = sampling4x;
             }
-            
+
             // Processing loop.
             for (uint32_t i = 0; i < n; ++i) {
                 type t = x[i];
 
-                for (uint32_t h = 0; h < stages; ++h) {
+                splitter[0].process(t);
+                type bass = splitter[0].lp;
+                t = splitter[0].hp;
+                type high = t;
 
-                    filterlp[h][0].process(t);
-                    t = filterlp[h][0].pass();
+                filterlp[0][0].process(t);
+                t = filterlp[0][0].pass();
+
+                for (uint32_t h = 0; h < stages; ++h) {
 
                     oversampler[h].upsample(t * sampling);
 #ifdef USE_LUT
@@ -175,13 +237,13 @@ namespace mnamp {
 
                     filterlp[h][1].process(t);
                     t = filterlp[h][1].pass();
-                    
                     highpass[h].process(t);
                     t = highpass[h].pass();
                     t = t * compensation;
                 }
-                
-                t *= volume;
+                t = (1. - eps) * high + eps * t;
+                t = (1. - mix) * bass + mix*t;
+                t = t * volume;
                 out[i] = t;
             }
         }

@@ -167,10 +167,7 @@ namespace mndist {
 
             // Processing loop.
             for (uint32_t i = 0; i < n; ++i) {
-                out[i] = x[i];
-            }
-            for (uint32_t i = 0; i < n; ++i) {
-                type t = out[i];
+                type t = x[i];
 
                 splitter[0].process(t);
                 type bass = splitter[0].lp;
@@ -199,7 +196,7 @@ namespace mndist {
                     for (uint32_t j = 0; j < sampling; j++) {
                         t = functions::T<type>(oversampler[h].buffer[j] * g * gain, 1.);
                         oversampler[h].buffer[j] = t;
-                    }                   
+                    }
 #endif
                     t = oversampler[h].downsample();
                     filterlp[h][1].process(t);
