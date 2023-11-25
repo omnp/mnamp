@@ -8,9 +8,11 @@
 #include <iomanip>
 #include <fstream>
 #include <ostream>
+#include <sstream>
+#include <string>
 #include <vector>
 
-template <typename type, uint32_t factor = 4u, uint32_t iterations = 32u, const uint32_t cascade_order = 8u, const type tension = 1e-6, typename table_type = std::vector<type>>
+template <typename type, uint32_t cascade_order = 8u>
 struct Generator
 {
 
@@ -18,7 +20,7 @@ struct Generator
     const type G_MAX;
     type *lut;
 
-    explicit Generator(uint32_t const g_steps = 64u, type const g_max = 1.) 
+    explicit Generator(uint32_t factor = 4u, uint32_t iterations = 32u, const type tension = 1e-6, uint32_t const g_steps = 64u, type const g_max = 1.) 
     : G_STEPS(g_steps),
       G_MAX(g_max) {
         filter_cascade<type, SVFilterAdapter<filters::lowpass, type>, cascade_order> lowpass;
@@ -43,7 +45,7 @@ struct Generator
         }
         lut = new type[G_STEPS];
         for (uint32_t g = 0u; g < G_STEPS; g++) {
-            type x = functions::approximate<type, filter_cascade<type, SVFilterAdapter<filters::highpass, type>, cascade_order>, std::vector<type>, iterations>( G_MAX * type(g) / type(G_STEPS-1u), highpass, table, factor, tension);
+            type x = functions::minimize<type, filter_cascade<type, SVFilterAdapter<filters::highpass, type>, cascade_order>, std::vector<type>>( G_MAX * type(g) / type(G_STEPS-1u), highpass, table, factor, tension, iterations);
             lut[g] = x;
         }
     }
@@ -71,11 +73,46 @@ struct Generator
     }
 };
 
-int main() {
-    Generator<float, 4u, 64u, 8u, 1e-6f> Gen(2048u,math::dbl<float>(120.0));
-    std::ofstream file("lookup.h", std::ios_base::trunc);
-    Gen.write(file);
-    file.close();
+template <typename type>
+type read_arg(char const * arg) {
+    std::stringstream s;
+    s << arg;
+    type r;
+    s >> r;
+    return r;
+}
 
+#ifdef CASCADE_ORDER
+uint32_t const cascade_order = CASCADE_ORDER;
+#else
+uint32_t const cascade_order = 4u;
+#endif
+
+int main(int count, char *args[]) {
+    enum argument {type = 1u, factor, iterations, tension, steps, max_db, arguments};
+    if (count >= arguments) {
+        uint32_t const factor_in = read_arg<uint32_t>(args[factor]);
+        uint32_t const iterations_in = read_arg<uint32_t>(args[iterations]);
+        uint32_t const steps_in = read_arg<uint32_t>(args[steps]);
+        if (read_arg<std::string>(args[type]) == "float") {
+            float const tension_in = read_arg<float>(args[tension]);
+            float const max_db_in = read_arg<float>(args[max_db]);
+            Generator<float, cascade_order> Gen(factor_in, iterations_in, tension_in, steps_in, math::dbl<float>(max_db_in));
+            std::ofstream file("lookup.h", std::ios_base::trunc);
+            Gen.write(file);
+            file.close();
+        }
+        else if (read_arg<std::string>(args[type]) == "double") {
+            float const tension_in = read_arg<double>(args[tension]);
+            float const max_db_in = read_arg<double>(args[max_db]);
+            Generator<double, cascade_order> Gen(factor_in, iterations_in, tension_in, steps_in, math::dbl<double>(max_db_in));
+            std::ofstream file("lookup.h", std::ios_base::trunc);
+            Gen.write(file);
+            file.close();
+        }
+    }
+    else {
+        std::cout << "\n\tRequires " << arguments << " arguments!\n" << std::endl;
+    }
     return 0;
 }

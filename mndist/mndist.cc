@@ -119,7 +119,7 @@ namespace mndist {
 #else
         HighpassCascade G_filter;
         type inline G(type g, std::array<type, constants::max_factor> & table, const uint32_t factor = constants::max_factor, const type tension = 1e-6, type (*function)(type, type) = functions::S<type>) {
-            return functions::approximate<type,HighpassCascade,std::array<type, constants::max_factor>,32u>(g, G_filter, table, factor,tension,function);
+            return functions::minimize<type,HighpassCascade,std::array<type, constants::max_factor>>(g, G_filter, table, factor,tension,32u,function);
         }
 #endif
     public:
@@ -185,7 +185,7 @@ namespace mndist {
                         t = oversampler[h].buffer[j];
                         type g = G(gain);
                         gains[h].process(g);
-                        g = gains[h].pass;
+                        g = gains[h].pass();
                         t = functions::S<type>(t * g * gain, 1.);
                         oversampler[h].buffer[j] = t;
                     }

@@ -2,6 +2,7 @@
 
 #include "math.h"
 #include "filter.h"
+#include <cstdint>
 
 namespace functions {
     template <typename type>
@@ -12,8 +13,8 @@ namespace functions {
     type inline T(type x, type limit) {
         return limit * std::tanh(x);
     }
-    template <typename type, typename filter_concrete, typename table_type, const uint32_t iterations = 1u>
-    type inline approximate(const type g, filter_concrete & filter1, const table_type & table, const uint32_t factor, const type tension = 1e-6, type (*S)(type, type) = functions::S<type>) {
+    template <typename type, typename filter_concrete, typename table_type>
+    type inline minimize(const type g, filter_concrete & filter1, const table_type & table, const uint32_t factor, const type tension = 1e-6, const uint32_t iterations = 1u, type (*S)(type, type) = functions::S<type>) {
         uint32_t k = 0;
         type dlt = 0.0;
         type r = 1.0;
