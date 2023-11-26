@@ -33,8 +33,9 @@ namespace mndist {
                 static const uint32_t eq = 11u;
                 static const uint32_t compensation = 12u;
                 static const uint32_t volume = 13u;
+                static const uint32_t shaping = 14u;
             };
-            static const uint32_t ports = 14u;
+            static const uint32_t ports = 15u;
             enum struct conversion {none = 0u, linear = 1u, db = 2u};
         };
         io_type * ports[constants::ports];
@@ -81,6 +82,7 @@ namespace mndist {
         port_parameter<constants::names::eq> eq{this};
         port_parameter<constants::names::compensation, type, constants::conversion::db> compensation{this};
         port_parameter<constants::names::volume, type, constants::conversion::db> volume{this};
+        port_parameter<constants::names::shaping, uint32_t, constants::conversion::none> shaping{this};
 
         using Lowpass = SVFilterAdapter<filters::lowpass, type>;
         using LowpassCascade = filter_cascade<type, Lowpass, 2u>;
@@ -118,7 +120,7 @@ namespace mndist {
         }
 #else
         HighpassCascade G_filter;
-        type inline G(type g, std::array<type, constants::max_factor> & table, const uint32_t factor = constants::max_factor, const type tension = 1e-6, type (*function)(type, type) = functions::S<type>) {
+        type inline G(type (*function)(type, type), type g, std::array<type, constants::max_factor> & table, const uint32_t factor = constants::max_factor, const type tension = 1e-6) {
             return functions::minimize<type,HighpassCascade,std::array<type, constants::max_factor>>(g, G_filter, table, factor,tension,32u,function);
         }
 #endif
@@ -155,6 +157,23 @@ namespace mndist {
             const type mix = this->eq();
             const type compensation = this->compensation();
             const type volume = this->volume();
+            const uint32_t shaping = this->shaping();
+
+            type (*shaper)(type,type) = functions::NOOP;
+            switch (shaping) {
+                case 0:
+                    shaper = functions::NOOP;
+                    break;
+                case 1:
+                    shaper = functions::S;
+                    break;
+                case 2:
+                    shaper = functions::T;
+                    break;
+                case 3:
+                    shaper = functions::H;
+                    break;
+            }
 
             // Preprocessing
             const uint32_t sampling = factor;
@@ -190,11 +209,11 @@ namespace mndist {
                         oversampler[h].buffer[j] = t;
                     }
 #else
-                    type g = G(gain, oversampler[h].buffer, factor, tension, functions::T<type>);
+                    type g = G(shaper, gain, oversampler[h].buffer, factor, tension);
                     gains[h].process(g);
                     g = gains[h].pass();
                     for (uint32_t j = 0; j < sampling; j++) {
-                        t = functions::T<type>(oversampler[h].buffer[j] * g * gain, 1.);
+                        t = shaper(oversampler[h].buffer[j] * g * gain, 1.);
                         oversampler[h].buffer[j] = t;
                     }
 #endif

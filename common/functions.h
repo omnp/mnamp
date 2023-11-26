@@ -6,12 +6,24 @@
 
 namespace functions {
     template <typename type>
+    type inline NOOP(type x, type limit) {
+        return x;
+    }
+    template <typename type>
     type inline S(type x, type limit) {
         return limit * x / (1. + std::abs(x));
     }
     template <typename type>
     type inline T(type x, type limit) {
         return limit * std::tanh(x);
+    }
+    template <typename type>
+    type inline H(type x, type limit) {
+        if (x > limit)
+            x = limit;
+        if (x < -limit)
+            x = -limit;
+        return x;
     }
     template <typename type, typename filter_concrete, typename table_type>
     type inline minimize(const type g, filter_concrete & filter1, const table_type & table, const uint32_t factor, const type tension = 1e-6, const uint32_t iterations = 1u, type (*S)(type, type) = functions::S<type>) {
