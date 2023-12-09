@@ -1,6 +1,8 @@
 #include <array>
 #include <lv2/core/lv2.h>
 #include "../common/math.h"
+#include "../common/onepole.h"
+#include "../common/twopole.h"
 #include "../common/svfilter.h"
 #include "../common/functions.h"
 #include "../common/resampler.h"
@@ -92,21 +94,21 @@ namespace mnamp {
         using LowpassCascade = filter_cascade<type, Lowpass, 2u>;
         using Highpass = SVFilterAdapter<filters::highpass, type>;
         using HighpassCascade = filter_cascade<type, Highpass, 2u>;
-        using Upsample = LowpassCascade;
-        using Downsample = LowpassCascade;
-
-        resampler<type, LowpassCascade, constants::max_factor> oversampler[constants::max_stages];
-        resampler<type, LowpassCascade, constants::max_factor> oversampler_poly[constants::max_stages];
+        using OnePoleCascade = filter_cascade<type, OnePole<type>, 8u>;
+        using TwoPoleCascade = filter_cascade<type, TwoPole<type>, 4u>;
+        
+        resampler<type, TwoPoleCascade, constants::max_factor> oversampler[constants::max_stages];
+        resampler<type, TwoPoleCascade, constants::max_factor> oversampler_poly[constants::max_stages];
         LowpassCascade filterlp[constants::max_stages][2u];
         SVFilter<type> splitter[constants::max_stages];
         HighpassCascade highpass[constants::max_stages];
-        LowpassCascade gains[constants::max_stages];
+        OnePole<type> gains[constants::max_stages];
         type sr;
-        filter_parameters<type, LowpassCascade> oversampler_filter_parameters;
-        filter_parameters<type, LowpassCascade> oversampler_poly_filter_parameters;
+        filter_parameters<type, TwoPoleCascade> oversampler_filter_parameters;
+        filter_parameters<type, TwoPoleCascade> oversampler_poly_filter_parameters;
         filter_parameters<type, LowpassCascade> lowpass_filter_parameters;
         filter_parameters<type, HighpassCascade> highpass_filter_parameters;
-        filter_parameters<type, LowpassCascade> gains_filter_parameters;
+        filter_parameters<type, OnePole<type>> gains_filter_parameters;
     public:
         explicit mnamp(type rate) : sr(rate) {
             for (uint32_t i = 0; i < constants::max_stages; i++) {
@@ -139,9 +141,9 @@ namespace mnamp {
             return lookup::lookup_table<type, lookup_parameters>::lookup(g);
         }
 #else
-        HighpassCascade G_filter;
+        OnePoleCascade G_filter;
         type inline G(type (*function)(type, type), type g, std::array<type, constants::max_factor> & table, const uint32_t factor = constants::max_factor, const type tension = 1e-6) {
-            return functions::minimize<type,HighpassCascade,std::array<type, constants::max_factor>>(g, G_filter, table, factor,tension,32u,function);
+            return functions::minimize<type,OnePoleCascade,std::array<type, constants::max_factor>>(g, G_filter, table, factor,tension,32u,function);
         }
 #endif
     public:
@@ -153,8 +155,8 @@ namespace mnamp {
             oversampler_filter_parameters.setparams(0.25, 0.5, 1.0);
             oversampler_poly_filter_parameters.setparams(0.25, 0.5, 1.0);
             highpass_filter_parameters.setparams(70.0/sr, 0.5, 1.0);
-            gains_filter_parameters.setparams(2.5/sr, 0.5, 1.0);
-            lowpass_filter_parameters.setparams(16200.0/sr, 0.5, 1.0);
+            gains_filter_parameters.setparams(50.0/sr/*2.5/sr*/, 0.5, 1.0);
+            lowpass_filter_parameters.setparams(0.25/*16200.0/sr*/, 0.5, 1.0);
         }
         void inline run(const uint32_t n) {
             for (uint32_t i = 0; i < constants::ports; ++i)
@@ -236,9 +238,11 @@ namespace mnamp {
                         oversampler[h].buffer[j] = t;
                     }
 #else
-                    type g = G(shaper, gain, oversampler[h].buffer, factor, tension);
+                    gains[h].process(gain);
+                    type g = std::abs(gains[h].pass());
+                    g = G(shaper, g, oversampler[h].buffer, factor, tension);
                     gains[h].process(g);
-                    g = gains[h].pass();
+                    g = std::abs(gains[h].pass());
                     for (uint32_t j = 0; j < sampling; j++) {
                         t = shaper(oversampler[h].buffer[j] * g * gain, 1.);
                         oversampler[h].buffer[j] = t;

@@ -1,8 +1,8 @@
 PLUGIN_TARGET_TYPE=.so# .dll
 EXECUTABLE_TARGET_TYPE=#.exe
-override CXXFLAGS+= -Wno-unused-parameter -Wall -Wextra -Werror -pedantic -std=c++20
+override CXXFLAGS+= -Wno-unused-parameter -Wno-implicit-fallthrough -Wall -Wextra -Werror -pedantic -std=c++20
 CXX=g++#clang++
-COMMON=common/math.h common/bqfilter.h common/svfilter.h common/functions.h
+COMMON=common/math.h common/resampler.h common/svfilter.h common/onepole.h common/twopole.h common/functions.h
 LOOKUP=lookup/lookup.h lookup/interpolate.h
 
 .PHONY: all

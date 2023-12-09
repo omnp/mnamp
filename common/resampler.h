@@ -29,7 +29,8 @@ public:
     type const downsample() {
         for (uint32_t i = 0u; i < downfactor; i++) {
             if (i < upfactor) {
-                downsampler.process(buffer[i]);
+                downsampler.process(buffer[downfactor-1u-i]);
+                //downsampler.process(buffer[i]);
             }
             else {
                 downsampler.process(0.0);

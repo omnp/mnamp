@@ -30,16 +30,19 @@ namespace functions {
         uint32_t k = 0;
         type dlt = 0.0;
         type r = 1.0;
+        filter1.setparams(0.5 / factor, 0.5, 1.0);
         while (k < iterations) {
             type t = 0.0;
+            type s = 0.0;
             filter1.reset();
             for (uint32_t j = 0; j < factor; j++) {
                 type y = S(table[j] * g * r, 1.);
                 filter1.process(y);
+                s += std::abs(y);
                 t += std::abs(filter1.pass());
             }
             k += 1u;
-            if (std::abs(t) > tension) {
+            if (std::abs(s - t) > tension) {
                 dlt = 1.0 / type(1u << k);
                 if (r - dlt >= 0.0)
                     r -= dlt;
