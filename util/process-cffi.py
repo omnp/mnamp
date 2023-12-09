@@ -39,7 +39,11 @@ import matplotlib.pyplot as plot
 n = 48000#4096
 sr = float(n)
 f = 50.0
-sine = array.array('f', ([math.sin(math.pi * f * 2.0 * (i/n)) for i in range(0,n+1,1)]))
+sine = numpy.array(([math.sin(math.pi * f * 2.0 * (i/n))/f for i in range(0,n+1,1)]))
+delta = 10.0
+for _ in range(1,64):
+    f += delta
+    sine += numpy.array(([math.sin(math.pi * f * 2.0 * (i/n))/f for i in range(0,n+1,1)]))
 out = array.array('f', [0.0,]*(n+1))
 amp = descriptor.instantiate(ffi.cast('LV2_Descriptor *', descriptor), sr, ffi.cast('const char *', 0), ffi.cast('const LV2_Feature * const*', 0))
 buffer_length = 32
@@ -60,6 +64,7 @@ ports = {
         'eps':ffi.new('float *'),
         'tension':ffi.new('float *'),
         'eq':ffi.new('float *'),
+        'shaping':ffi.new('float *'),
         }
 print(ports)
 descriptor.connect_port(amp, 0, ports['out'])
@@ -78,21 +83,23 @@ descriptor.connect_port(amp, 12, ports['tension'])
 descriptor.connect_port(amp, 133, ports['eq'])
 descriptor.connect_port(amp, 14, ports['compensation'])
 descriptor.connect_port(amp, 15, ports['volume'])
+descriptor.connect_port(amp, 16, ports['shaping'])
 descriptor.activate(amp)
-ports['gain1'][0] = ffi.cast('float', 24.0)
-ports['gain2'][0] = ffi.cast('float', 48.0)
-ports['toggle'][0] = ffi.cast('float', 0.0)
-ports['cutoff'][0] = ffi.cast('float', 7200.0)
+ports['gain1'][0] = ffi.cast('float', 3.0)
+ports['gain2'][0] = ffi.cast('float', 13.0)
+ports['toggle'][0] = ffi.cast('float', 1.0)
+ports['cutoff'][0] = ffi.cast('float', 1200.0)
 ports['volume'][0] = ffi.cast('float', -0.0)
 ports['stages'][0] = ffi.cast('float', ffi.cast('unsigned int', 12))
 ports['compensation'][0] = ffi.cast('float', -0.0)
 ports['drive1'][0] = ffi.cast('float', 0.707)
 ports['drive2'][0] = ffi.cast('float', 0.606)
-ports['resonance'][0] = ffi.cast('float', 0.78)
-ports['factor'][0] = ffi.cast('float', ffi.cast('unsigned int', 4))
-ports['eps'][0] = ffi.cast('float', 1.0)
-ports['tension'][0] = ffi.cast('float', 72000.0)
-ports['eq'][0] = ffi.cast('float', 1.0)
+ports['resonance'][0] = ffi.cast('float', 0.707)
+ports['factor'][0] = ffi.cast('float', ffi.cast('unsigned int', 1))
+ports['eps'][0] = ffi.cast('float', 0.8)
+ports['tension'][0] = ffi.cast('float', 0.0)
+ports['eq'][0] = ffi.cast('float', 0.8)
+ports['shaping'][0] = ffi.cast('float', ffi.cast('unsigned int', 2))
 for i in range(0,len(sine)-1,buffer_length):
     for j in range(0, buffer_length):
         ports['in'][j] = sine[i+j]
