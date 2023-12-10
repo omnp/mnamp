@@ -109,6 +109,7 @@ namespace mnamp {
         filter_parameters<type, LowpassCascade> lowpass_filter_parameters;
         filter_parameters<type, HighpassCascade> highpass_filter_parameters;
         filter_parameters<type, OnePole<type>> gains_filter_parameters;
+        const uint32_t iterations = 40u;
     public:
         explicit mnamp(type rate) : sr(rate) {
             for (uint32_t i = 0; i < constants::max_stages; i++) {
@@ -143,7 +144,7 @@ namespace mnamp {
 #else
         OnePoleCascade G_filter;
         type inline G(type (*function)(type, type), type g, std::array<type, constants::max_factor> & table, const uint32_t factor = constants::max_factor, const type tension = 1e-6) {
-            return functions::minimize<type,OnePoleCascade,std::array<type, constants::max_factor>>(g, G_filter, table, factor,tension,32u,function);
+            return functions::minimize<type,OnePoleCascade,std::array<type, constants::max_factor>>(g, G_filter, table, factor,tension,iterations,function);
         }
 #endif
     public:
