@@ -22,13 +22,10 @@ public:
     }
     void process(type const x) {
         y = b * x + a * y;
-        //s = x - y;
         s = y;
     }
     void setparams(type k, type q, type sr) {
         type f = k/sr;
-        //a = -std::exp(-2.0 * M_PI * f);
-        //b = 1.0 + a;
         a = std::exp(-2.0 * M_PI * f);
         b = 1.0 - a;
     }
