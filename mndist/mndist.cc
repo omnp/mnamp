@@ -213,12 +213,12 @@ namespace mndist {
                     }
 #else
                     gains[h].process(gain);
-                    type g = std::abs(gains[h].pass());
+                    type g = gains[h].pass();
                     g = G(shaper, g, oversampler[h].buffer, factor, tension);
-                    gains[h].process(g);
-                    g = std::abs(gains[h].pass());
+                    gains[h].process(g * gain);
+                    g = gains[h].pass();
                     for (uint32_t j = 0; j < sampling; j++) {
-                        t = shaper(oversampler[h].buffer[j] * g * gain, 1.);
+                        t = shaper(oversampler[h].buffer[j] * g, 1.);
                         oversampler[h].buffer[j] = t;
                     }
 #endif
