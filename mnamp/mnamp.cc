@@ -6,6 +6,7 @@
 #include "../common/svfilter.h"
 #include "../common/functions.h"
 #include "../common/resampler.h"
+#include "../common/sosfilters.h"
 
 namespace mnamp {
 #ifdef USE_LUT
@@ -51,10 +52,11 @@ namespace mnamp {
         template <uint32_t name = constants::ports, typename return_type = type, const typename constants::conversion c = constants::conversion::linear>
         struct port_parameter {
             explicit port_parameter(mnamp const * m) : m{m} {
+                input_filter.setparams(50.0/m->sr, 1.0, 1.0);
             }
             mnamp const * m;
             uint32_t const index = name;
-            averaging<type> input_filter;
+            OnePole<type> input_filter;
             return_type operator()() {
                 type in = *m->port(name);
                 switch (c) {
@@ -89,6 +91,7 @@ namespace mnamp {
         port_parameter<constants::names::compensation, type, constants::conversion::db> compensation{this};
         port_parameter<constants::names::volume, type, constants::conversion::db> volume{this};
         port_parameter<constants::names::shaping, uint32_t, constants::conversion::none> shaping{this};
+        OnePole<type> gain_filter;
 
         using Lowpass = SVFilterAdapter<filters::lowpass, type>;
         using LowpassCascade = filter_cascade<type, Lowpass, 2u>;
@@ -97,15 +100,13 @@ namespace mnamp {
         using OnePoleCascade = filter_cascade<type, OnePole<type>, 8u>;
         using TwoPoleCascade = filter_cascade<type, TwoPole<type>, 4u>;
         
-        resampler<type, TwoPoleCascade, constants::max_factor> oversampler[constants::max_stages];
-        resampler<type, TwoPoleCascade, constants::max_factor> oversampler_poly[constants::max_stages];
+        resampler<type, elliptic<type>, constants::max_factor> oversampler[constants::max_stages];
+        resampler<type, elliptic<type>, constants::max_factor> oversampler_poly[constants::max_stages];
         LowpassCascade filterlp[constants::max_stages][2u];
         SVFilter<type> splitter[constants::max_stages];
         HighpassCascade highpass[constants::max_stages];
         OnePole<type> gains[constants::max_stages];
         type sr;
-        filter_parameters<type, TwoPoleCascade> oversampler_filter_parameters;
-        filter_parameters<type, TwoPoleCascade> oversampler_poly_filter_parameters;
         filter_parameters<type, LowpassCascade> lowpass_filter_parameters;
         filter_parameters<type, HighpassCascade> highpass_filter_parameters;
         filter_parameters<type, OnePole<type>> gains_filter_parameters;
@@ -113,10 +114,6 @@ namespace mnamp {
     public:
         explicit mnamp(type rate) : sr(rate) {
             for (uint32_t i = 0; i < constants::max_stages; i++) {
-                oversampler_filter_parameters.append(oversampler[i].upsampler);
-                oversampler_filter_parameters.append(oversampler[i].downsampler);
-                oversampler_poly_filter_parameters.append(oversampler_poly[i].upsampler);
-                oversampler_poly_filter_parameters.append(oversampler_poly[i].downsampler);
                 lowpass_filter_parameters.append(filterlp[i][0]);
                 lowpass_filter_parameters.append(filterlp[i][1]);
                 highpass_filter_parameters.append(highpass[i]);
@@ -129,22 +126,26 @@ namespace mnamp {
             type s = math::sgn<>(u);
             u = std::abs(u);
             type v = u;
-            type w = u;
-            v = v * (1. - drive2) + drive2 * (v + (1. - v) * (0.25*v + 0.5*v*v));
-            u = u * (1. - drive1) + drive1 * (u + (1. - u) * (0.0625*u + 0.125*u*u + 0.25*u*u*u + 0.5*u*u*u*u));
+            //type w = u;
+            //v = v + drive2 * v * ((0.5*v + 0.25*v*v*v));
+            //u = u + drive1 * u * ((0.0625*u*u*u*u*u*u*u + 0.125*u*u*u*u*u + 0.25*u*u*u + 0.5*u));
+            v = 0.5*v+0.25*v*v*v+0.125*v*v*v*v*v+0.0625*v*v*v*v*v*v*v;
+            v = drive2 * v;
+            u = 0.5*u+0.25*u*u+0.125*u*u*u*u+0.0625*u*u*u*u*u*u+0.03125*u*u*u*u*u*u*u*u;
+            u = drive1 * u;
             u = (1.-type(h)/stages) * u + (type(h)/stages) * v;
-            u = (1. - eps) * w + eps * u;
+            //u = (1. - eps) * w + eps * u;
             u = u * s;
             return u;
         };
 #ifdef USE_LUT
-        type inline G(type g) {
-            return lookup::lookup_table<type, lookup_parameters>::lookup(g);
+        type inline G(type g, type (*shaper)(type, type)) {
+            return lookup::lookup_table<type, lookup_parameters>::lookup(g, shaper);
         }
 #else
-        OnePoleCascade G_filter;
+        elliptic<type> G_filter;
         type inline G(type (*function)(type, type), type g, std::array<type, constants::max_factor> & table, const uint32_t factor = constants::max_factor, const type tension = 1e-6) {
-            return functions::minimize<type,OnePoleCascade,std::array<type, constants::max_factor>>(g, G_filter, table, factor,tension,iterations,function);
+            return functions::minimize<type,elliptic<type>,std::array<type, constants::max_factor>>(g, G_filter, table, factor,tension,iterations,function);
         }
 #endif
     public:
@@ -153,10 +154,15 @@ namespace mnamp {
                 ports[port] = (io_type *) data;
         }
         void activate() {
-            oversampler_filter_parameters.setparams(0.25, 0.5, 1.0);
-            oversampler_poly_filter_parameters.setparams(0.25, 0.5, 1.0);
+            gain_filter.setparams(50.0/sr, 1.0, 1.0);
+            for (uint32_t j = 0; j < constants::max_stages; j++) {
+                oversampler[j].upsampler.setparams(1.0);
+                oversampler[j].downsampler.setparams(1.0);
+                oversampler_poly[j].upsampler.setparams(1.0);
+                oversampler_poly[j].downsampler.setparams(1.0);
+            }
             highpass_filter_parameters.setparams(70.0/sr, 0.5, 1.0);
-            gains_filter_parameters.setparams(50.0/sr/*2.5/sr*/, 0.5, 1.0);
+            gains_filter_parameters.setparams(5.0/sr/*2.5/sr*/, 0.5, 1.0);
             lowpass_filter_parameters.setparams(0.25/*16200.0/sr*/, 0.5, 1.0);
         }
         void inline run(const uint32_t n) {
@@ -179,7 +185,8 @@ namespace mnamp {
 #endif
             uint32_t const factor = this->factor();
             uint32_t const stages = this->stages();
-            const type gain = (1-toggle)*gain1 + (toggle)*gain2;
+            gain_filter.process((1-toggle)*gain1 + (toggle)*gain2);
+            const type gain = gain_filter.pass();
             const type mix = this->eq();
             const type compensation = this->compensation();
             const type volume = this->volume();
@@ -204,14 +211,16 @@ namespace mnamp {
             // Preprocessing
             const uint32_t sampling = factor;
             const uint32_t sampling4x = 8u;
-            oversampler_filter_parameters.setparams(0.5 / sampling, 0.5, 1.0);
-            oversampler_poly_filter_parameters.setparams(0.5 / sampling4x, 0.5, 1.0);
             for (uint32_t j = 0; j < constants::max_stages; j++) {
                 splitter[j].setparams(cutoff / sr, resonance / (1+j), 1.0);
                 oversampler[j].upfactor = sampling;
                 oversampler[j].downfactor = sampling;
+                oversampler[j].upsampler.setparams(sampling/2.0);
+                oversampler[j].downsampler.setparams(sampling/2.0);
                 oversampler_poly[j].upfactor = sampling4x;
                 oversampler_poly[j].downfactor = sampling4x;
+                oversampler[j].upsampler.setparams(sampling4x/2.0);
+                oversampler[j].downsampler.setparams(sampling4x/2.0);
             }
 
             // Processing loop.
@@ -230,22 +239,28 @@ namespace mnamp {
 
                     oversampler[h].upsample(t * sampling);
 #ifdef USE_LUT
+                    type g = gains[h].pass();
+                    g = G(g * gain, shaper);
+                    gains[h].process(g);
+                    gains[h].process(0.0);
+                    gains[h].process(0.0);
+                    gains[h].process(0.0);
+                    g = gains[h].pass();
                     for (uint32_t j = 0; j < sampling; j++) {
                         t = oversampler[h].buffer[j];
-                        type g = G(gain);
-                        gains[h].process(g);
-                        g = gains[h].pass();
-                        t = functions::S<type>(t * g * gain, 1.);
+                        t = shaper(t * g * gain, 1.);
                         oversampler[h].buffer[j] = t;
                     }
 #else
-                    gains[h].process(gain);
                     type g = gains[h].pass();
-                    g = G(shaper, g, oversampler[h].buffer, factor, tension);
-                    gains[h].process(g * gain);
+                    g = G(shaper, g * gain, oversampler[h].buffer, factor, tension);
+                    gains[h].process(g);
+                    gains[h].process(0.0);
+                    gains[h].process(0.0);
+                    gains[h].process(0.0);
                     g = gains[h].pass();
                     for (uint32_t j = 0; j < sampling; j++) {
-                        t = shaper(oversampler[h].buffer[j] * g, 1.);
+                        t = shaper(oversampler[h].buffer[j] * g * gain, 1.);
                         oversampler[h].buffer[j] = t;
                     }
 #endif

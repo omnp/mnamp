@@ -68,7 +68,7 @@ public:
             filters[i].reset();
         }
     }
-    void setparams(const type k, const type q, const type sr) {
+    void setparams(const type k, const type q = 1.0, const type sr = 1.0) {
         for (uint32_t i = 0; i < number; i++) {
             filters[i].setparams(k, q, sr);
         }
@@ -89,7 +89,7 @@ public:
         filters.push_back(&f);
         f.setparams(k,q,sr);
     }
-    void setparams(type k, type q, type sr) {
+    void setparams(type k, type q = 1.0, type sr = 1.0) {
         this->k = k;
         this->q = q;
         this->sr = sr;

@@ -1,6 +1,6 @@
 #include "../common/math.h"
 #include "../common/functions.h"
-#include "../common/svfilter.h"
+#include "../common/sosfilters.h"
 
 #include <cstdint>
 #include <ios>
@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-template <typename type, uint32_t cascade_order = 8u>
+template <typename type, uint32_t cascade_order = 1u>
 struct Generator
 {
 
@@ -23,12 +23,12 @@ struct Generator
     explicit Generator(uint32_t factor = 4u, uint32_t iterations = 32u, const type tension = 1e-6, uint32_t const g_steps = 64u, type const g_max = 1.) 
     : G_STEPS(g_steps),
       G_MAX(g_max) {
-        filter_cascade<type, SVFilterAdapter<filters::lowpass, type>, cascade_order> lowpass;
-        filter_cascade<type, SVFilterAdapter<filters::highpass, type>, cascade_order> highpass;
-        type const cutoff = 0.5 / factor;
-        type const Q = 0.500;
-        lowpass.setparams(cutoff, Q, 1.0);
-        highpass.setparams(cutoff, Q, 1.0);
+        filter_cascade<type, elliptic<type>, cascade_order> lowpass;
+        filter_cascade<type, elliptic<type>, cascade_order> highpass;
+        //type const cutoff = 0.5 / factor;
+        //type const Q = 0.500;
+        lowpass.setparams(type(factor) / type(2.0), 1.0, 1.0);
+        highpass.setparams(type(factor) / type(2.0), 1.0, 1.0);
         std::vector<type> table;
         type sign = 1.0;
         for (uint32_t i = 0; i < 4u/*G_STEPS*/; i++) {
@@ -43,10 +43,30 @@ struct Generator
             if ((i+1) % 2 == 0)
                 sign = -sign;
         }
-        lut = new type[G_STEPS];
-        for (uint32_t g = 0u; g < G_STEPS; g++) {
-            type x = functions::minimize<type, filter_cascade<type, SVFilterAdapter<filters::highpass, type>, cascade_order>, std::vector<type>>( G_MAX * type(g) / type(G_STEPS-1u), highpass, table, factor, tension, iterations);
-            lut[g] = x;
+        lut = new type[4u*G_STEPS];
+        for (uint32_t i = 0; i < 4u; i++) {
+            for (uint32_t g = 0u; g < G_STEPS; g++) {
+                type x = 0.0;
+                switch (i) {
+                    case 0: {
+                        x = functions::minimize<type, filter_cascade<type, elliptic<type>, cascade_order>, std::vector<type>>( G_MAX * type(g) / type(G_STEPS-1u), highpass, table, factor, tension, iterations, functions::NOOP);
+                        break;
+                    }
+                    case 1: {
+                        x = functions::minimize<type, filter_cascade<type, elliptic<type>, cascade_order>, std::vector<type>>( G_MAX * type(g) / type(G_STEPS-1u), highpass, table, factor, tension, iterations, functions::S);
+                        break;
+                    }
+                    case 2: {
+                        x = functions::minimize<type, filter_cascade<type, elliptic<type>, cascade_order>, std::vector<type>>( G_MAX * type(g) / type(G_STEPS-1u), highpass, table, factor, tension, iterations, functions::T);
+                        break;
+                    }
+                    case 3: {
+                        x = functions::minimize<type, filter_cascade<type, elliptic<type>, cascade_order>, std::vector<type>>( G_MAX * type(g) / type(G_STEPS-1u), highpass, table, factor, tension, iterations, functions::H);
+                        break;
+                    }
+                }
+                lut[i*G_STEPS+g] = x;
+            }
         }
     }
     ~Generator () {delete[] lut;}
@@ -57,12 +77,14 @@ struct Generator
         out << "template <typename type> struct  lookup_parameters {" << std::endl;
         out << "static const uint32_t g_steps {" << G_STEPS << "u};" << std::endl;
         out << "static const type constexpr g_max {" << G_MAX << "};" << std::endl;
-        out << "static const type constexpr lut[g_steps] = " << std::endl;
+        out << "static const type constexpr lut[4u*g_steps] = " << std::endl;
         out << "{";
-        for (uint32_t g = 0u; g < G_STEPS; g++) {
-            out << std::setprecision(32u) << lut[g];
-            out << ",";
-            out << std::flush;
+        for (uint32_t i = 0; i < 4u; i++) {
+            for (uint32_t g = 0u; g < G_STEPS; g++) {
+                out << std::setprecision(32u) << lut[i*G_STEPS+g];
+                out << ",";
+                out << std::flush;
+            }
         }
         out << "};";
         out << std::flush;

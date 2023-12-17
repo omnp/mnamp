@@ -24,17 +24,30 @@ public:
             upsampler.process(0.0);
             buffer[i] = upsampler.pass();
         }
+        for (uint32_t i = 0u; i < upfactor; i++) {
+            upsampler.process(buffer[upfactor-1u-i]);
+            buffer[upfactor-1u-i] = upsampler.pass();
+        }
     }
 
     type const downsample() {
         for (uint32_t i = 0u; i < downfactor; i++) {
             if (i < upfactor) {
-                downsampler.process(buffer[downfactor-1u-i]);
-                //downsampler.process(buffer[i]);
+                downsampler.process(buffer[i]);
             }
             else {
                 downsampler.process(0.0);
             }
+            buffer[i] = downsampler.pass();
+        }
+        for (uint32_t i = 0u; i < downfactor; i++) {
+            if (i < upfactor) {
+                downsampler.process(buffer[downfactor-1u-i]);
+            }
+            else {
+                downsampler.process(0.0);
+            }
+            buffer[downfactor-1u-i] = downsampler.pass();
         }
         return downsampler.pass();
     }

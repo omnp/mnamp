@@ -2,7 +2,7 @@
 
 #include "math.h"
 
-template <typename type> struct BiQuad
+template <typename type> struct Biquad
 {
 public:
     type delay[4] = {0.,0.,0.,0.};
@@ -20,7 +20,7 @@ template <typename type, uint32_t N> struct BQFilter
 {
 private:
     uint32_t n;
-    BiQuad<type> B[N];
+    Biquad<type> B[N];
     type k;
     type w;
     type q;
