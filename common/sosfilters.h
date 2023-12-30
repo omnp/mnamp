@@ -7,8 +7,9 @@ template <typename type>
 class unit_delay {
 private:
     type y;
+    type saved_y;
 public:
-    unit_delay() : y{0.0} {
+    unit_delay() : y{0.0}, saved_y{0.0} {
     }
     type process(type const x) {
         type y = this->y;
@@ -18,7 +19,10 @@ public:
     void setparams(type const d) {
     }
     void reset() {
-        y = 0.0;
+        y = saved_y;
+    }
+    void save_state() {
+        saved_y = y;
     }
 };
 
@@ -28,8 +32,9 @@ private:
     type x;
     type y;
     type f;
+    type saved_x, saved_y;
 public:
-    allpass() : x{0.0}, y{0.0}, f{1.0-0.5/1.0+0.5} {
+    allpass() : x{0.0}, y{0.0}, f{(1.0-0.5)/(1.0+0.5)}, saved_x{0.0}, saved_y{0.0} {
     }
     type process(type const x) {
         type y = f*x + this->x - f*this->y;
@@ -41,8 +46,12 @@ public:
         f = (1.0-d)/(1.0+d);
     }
     void reset() {
-        this->x = 0.0;
-        this->y = 0.0;
+        this->x = saved_x;
+        this->y = saved_y;
+    }
+    void save_state() {
+        saved_x = x;
+        saved_y = y;
     }
 };
 
@@ -54,12 +63,14 @@ private:
     delay_type x[2];
     delay_type y[2];
     type out;
+    type saved_out;
 public:
     second_order_section(type b[3], type a[3]) {
         for (uint32_t i = 0; i < 3; i++) {
             this->b[i] = b[i];
             this->a[i] = a[i];
             out = 0.0;
+            saved_out = 0.0;
         }
     }
     type const pass() const {
@@ -92,12 +103,21 @@ public:
         }
     }
     void reset() {
-        out = 0.0;
+        out = saved_out;
         for (auto & x: this->x) {
             x.reset();
         }
         for (auto & y: this->y) {
             y.reset();
+        }
+    }
+    void save_state() {
+        saved_out = out;
+        for (auto & x: this->x) {
+            x.save_state();
+        }
+        for (auto & y: this->y) {
+            y.save_state();
         }
     }
 };
@@ -107,6 +127,7 @@ class filter_of_second_order_sections {
 private:
     std::list<second_order_section<type, allpass<type>>> sections;
     type out;
+    type saved_out;
 public:
     filter_of_second_order_sections(uint32_t const number_of_sections, type const * coefficients) {
         for (uint32_t i = 0; i< number_of_sections; i++) {
@@ -121,6 +142,7 @@ public:
             sections.push_back(second_order_section<type, allpass<type>>(b, a));
         }
         out = 0.0;
+        saved_out = 0.0;
     }
     type const pass() const {
         return out;
@@ -139,9 +161,15 @@ public:
         }
     }
     void reset() {
-        out = 0.0;
+        out = saved_out;
         for (auto & section: sections) {
             section.reset();
+        }
+    }
+    void save_state() {
+        saved_out = out;
+        for (auto & section: sections) {
+            section.save_state();
         }
     }
 };

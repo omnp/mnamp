@@ -31,6 +31,7 @@ namespace functions {
         type dlt = 0.0;
         type r = 1.0;
         filter1.setparams(type(factor) / type(2.0), 1.0, 1.0);
+        filter1.save_state();
         while (k < iterations) {
             type t = 0.0;
             type s = 0.0;

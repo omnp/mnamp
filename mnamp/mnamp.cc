@@ -219,8 +219,8 @@ namespace mnamp {
                 oversampler[j].downsampler.setparams(sampling/2.0);
                 oversampler_poly[j].upfactor = sampling4x;
                 oversampler_poly[j].downfactor = sampling4x;
-                oversampler[j].upsampler.setparams(sampling4x/2.0);
-                oversampler[j].downsampler.setparams(sampling4x/2.0);
+                oversampler_poly[j].upsampler.setparams(sampling4x/2.0);
+                oversampler_poly[j].downsampler.setparams(sampling4x/2.0);
             }
 
             // Processing loop.
@@ -242,9 +242,6 @@ namespace mnamp {
                     type g = gains[h].pass();
                     g = G(g * gain, shaper);
                     gains[h].process(g);
-                    gains[h].process(0.0);
-                    gains[h].process(0.0);
-                    gains[h].process(0.0);
                     g = gains[h].pass();
                     for (uint32_t j = 0; j < sampling; j++) {
                         t = oversampler[h].buffer[j];
@@ -255,9 +252,6 @@ namespace mnamp {
                     type g = gains[h].pass();
                     g = G(shaper, g * gain, oversampler[h].buffer, factor, tension);
                     gains[h].process(g);
-                    gains[h].process(0.0);
-                    gains[h].process(0.0);
-                    gains[h].process(0.0);
                     g = gains[h].pass();
                     for (uint32_t j = 0; j < sampling; j++) {
                         t = shaper(oversampler[h].buffer[j] * g * gain, 1.);

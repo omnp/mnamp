@@ -212,9 +212,6 @@ namespace mndist {
                     type g = gains[h].pass();
                     g = G(g * gain, shaper);
                     gains[h].process(g);
-                    gains[h].process(0.0);
-                    gains[h].process(0.0);
-                    gains[h].process(0.0);
                     g = gains[h].pass();
                     for (uint32_t j = 0; j < sampling; j++) {
                         t = oversampler[h].buffer[j];
@@ -225,9 +222,6 @@ namespace mndist {
                     type g = gains[h].pass();
                     g = G(shaper, g * gain, oversampler[h].buffer, factor, tension);
                     gains[h].process(g);
-                    gains[h].process(0.0);
-                    gains[h].process(0.0);
-                    gains[h].process(0.0);
                     g = gains[h].pass();
                     for (uint32_t j = 0; j < sampling; j++) {
                         t = shaper(oversampler[h].buffer[j] * g * gain, 1.);
