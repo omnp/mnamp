@@ -209,20 +209,20 @@ namespace mndist {
 
                     oversampler[h].upsample(t * sampling);
 #ifdef USE_LUT
-                    type g = gains[h].pass();
+                    type g = std::abs(gains[h].pass());
                     g = G(g * gain, shaper);
                     gains[h].process(g);
-                    g = gains[h].pass();
+                    g = std::abs(gains[h].pass());
                     for (uint32_t j = 0; j < sampling; j++) {
                         t = oversampler[h].buffer[j];
                         t = shaper(t * g * gain, 1.);
                         oversampler[h].buffer[j] = t;
                     }
 #else
-                    type g = gains[h].pass();
+                    type g = std::abs(gains[h].pass());
                     g = G(shaper, g * gain, oversampler[h].buffer, factor, tension);
                     gains[h].process(g);
-                    g = gains[h].pass();
+                    g = std::abs(gains[h].pass());
                     for (uint32_t j = 0; j < sampling; j++) {
                         t = shaper(oversampler[h].buffer[j] * g * gain, 1.);
                         oversampler[h].buffer[j] = t;
