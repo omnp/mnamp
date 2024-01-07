@@ -32,9 +32,11 @@ namespace functions {
         type r = 1.0;
         filter1.setparams(type(factor) / type(2.0), 1.0, 1.0);
         filter1.save_state();
+        type t = 0.0;
+        type s = 0.0;
         while (k < iterations) {
-            type t = 0.0;
-            type s = 0.0;
+            t = 0.0;
+            s = 0.0;
             filter1.reset();
             for (uint32_t j = 0; j < factor; j++) {
                 type y = shaper(table[j] * g * r, 1.);
@@ -52,6 +54,6 @@ namespace functions {
                 break;
             }
         }
-        return r;
+        return s > 0.0 ? r : 0.0;
     }
 }
