@@ -136,7 +136,7 @@ namespace mndist {
                 oversampler[j].downsampler.setparams(1.0);
             }
             highpass_filter_parameters.setparams(70.0/sr, 0.5, 1.0);
-            gains_filter_parameters.setparams(20.0/sr, 0.5, 1.0);
+            gains_filter_parameters.setparams(2400.0/sr, 0.5, 1.0);
             lowpass_filter_parameters.setparams(0.25, 0.5, 1.0);
         }
         void inline run(const uint32_t n) {

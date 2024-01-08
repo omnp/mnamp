@@ -123,7 +123,7 @@ namespace mnamp {
             type s = math::sgn<>(u);
             u = std::abs(u);
             type v = u;
-            v = (1.-drive2) * v + drive2 * (0.5*v+0.25*v*v*v+0.125*v*v*v*v*v+0.0625*v*v*v*v*v*v*v);
+            v = (1.-drive2) * v + drive2 * (0.5*v+0.25*v*v+0.125*v*v*v*v);
             u = (1.-drive1) * u + drive1 * (0.5*u+0.25*u*u+0.125*u*u*u*u+0.0625*u*u*u*u*u*u+0.03125*u*u*u*u*u*u*u*u);
             u = (1.-type(h)/stages) * u + (type(h)/stages) * v;
             u = u * s;
@@ -153,7 +153,7 @@ namespace mnamp {
                 oversampler_poly[j].downsampler.setparams(1.0);
             }
             highpass_filter_parameters.setparams(70.0/sr, 0.5, 1.0);
-            gains_filter_parameters.setparams(20.0/sr, 0.5, 1.0);
+            gains_filter_parameters.setparams(2400.0/sr, 0.5, 1.0);
             lowpass_filter_parameters.setparams(0.25, 0.5, 1.0);
         }
         void inline run(const uint32_t n) {
