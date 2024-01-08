@@ -130,7 +130,7 @@ namespace mndist {
                 ports[port] = (io_type *) data;
         }
         void activate() {
-            gain_filter.setparams(50.0/sr, 1.0, 1.0);
+            gain_filter.setparams(300.0/sr, 1.0, 1.0);
             for (uint32_t j = 0; j < constants::max_stages; j++) {
                 oversampler[j].upsampler.setparams(1.0);
                 oversampler[j].downsampler.setparams(1.0);
