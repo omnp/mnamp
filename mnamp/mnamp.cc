@@ -17,9 +17,10 @@ namespace mnamp {
     class mnamp
     {
     private:
+        type sr;
         struct constants {
-            static const uint32_t max_stages {16u};
-            static const uint32_t max_factor {16u};
+            static const uint32_t max_stages {4u};
+            static const uint32_t max_factor {128u};
             struct names {
                 static const uint32_t out = 0u;
                 static const uint32_t in = 1u;
@@ -28,18 +29,19 @@ namespace mnamp {
                 static const uint32_t toggle = 4u;
                 static const uint32_t cutoff = 5u;
                 static const uint32_t stages = 6u;
-                static const uint32_t drive1 = 7u;
-                static const uint32_t drive2 = 8u;
-                static const uint32_t resonance = 9u;
-                static const uint32_t factor = 10u;
-                static const uint32_t eps = 11u;
-                static const uint32_t tension = 12u;
-                static const uint32_t eq = 13u;
-                static const uint32_t compensation = 14u;
-                static const uint32_t volume = 15u;
-                static const uint32_t shaping = 16u;
+                static const uint32_t bias = 7u;
+                static const uint32_t drive1 = 8u;
+                static const uint32_t drive2 = 9u;
+                static const uint32_t resonance = 10u;
+                static const uint32_t factor = 11u;
+                static const uint32_t eps = 12u;
+                static const uint32_t tension = 13u;
+                static const uint32_t eq = 14u;
+                static const uint32_t compensation = 15u;
+                static const uint32_t volume = 16u;
+                static const uint32_t shaping = 17u;
             };
-            static const uint32_t ports = 17u;
+            static const uint32_t ports = 18u;
             enum struct conversion {none = 0u, linear = 1u, db = 2u};
         };
         io_type * ports[constants::ports];
@@ -80,6 +82,7 @@ namespace mnamp {
         port_parameter<constants::names::toggle, uint32_t, constants::conversion::none> toggle{this};
         port_parameter<constants::names::cutoff> cutoff{this};
         port_parameter<constants::names::stages, uint32_t, constants::conversion::none> stages{this};
+        port_parameter<constants::names::bias> bias{this};
         port_parameter<constants::names::drive1> drive1{this};
         port_parameter<constants::names::drive2> drive2{this};
         port_parameter<constants::names::resonance> resonance{this};
@@ -98,12 +101,10 @@ namespace mnamp {
         using HighpassCascade = filter_cascade<type, Highpass, 2u>;
         
         resampler<type, elliptic<type>, constants::max_factor> oversampler[constants::max_stages];
-        resampler<type, elliptic<type>, constants::max_factor> oversampler_poly[constants::max_stages];
         LowpassCascade filterlp[constants::max_stages][2u];
-        SVFilter<type> splitter[constants::max_stages];
+        SVFilter<type> splitter[2u*constants::max_stages];
         HighpassCascade highpass[constants::max_stages];
         SVFilter<type> gains[constants::max_stages];
-        type sr;
         filter_parameters<type, LowpassCascade> lowpass_filter_parameters;
         filter_parameters<type, HighpassCascade> highpass_filter_parameters;
         filter_parameters<type, SVFilter<type>> gains_filter_parameters;
@@ -119,24 +120,14 @@ namespace mnamp {
         }
         ~mnamp() {}
     private:
-        type inline poly(type u, const uint32_t & h, const type & eps, const type & drive1, const type & drive2, const uint32_t & stages) {
-            type s = math::sgn<>(u);
-            u = std::abs(u);
-            type v = u;
-            v = (1.-drive2) * v + drive2 * (0.5*v+0.25*v*v+0.125*v*v*v*v);
-            u = (1.-drive1) * u + drive1 * (0.5*u+0.25*u*u+0.125*u*u*u*u+0.0625*u*u*u*u*u*u+0.03125*u*u*u*u*u*u*u*u);
-            u = (1.-type(h)/stages) * u + (type(h)/stages) * v;
-            u = u * s;
-            return u;
-        };
 #ifdef USE_LUT
         type inline G(type g, type (*shaper)(type, type)) {
             return lookup::lookup_table<type, lookup_parameters>::lookup(g, shaper);
         }
 #else
-        elliptic<type> G_filter;
+        SVFilter<type> G_filter;
         type inline G(type (*function)(type, type), type g, std::array<type, constants::max_factor> & table, const uint32_t factor = constants::max_factor, const type tension = 1e-6) {
-            return functions::minimize<type,elliptic<type>,std::array<type, constants::max_factor>>(g, G_filter, table, factor,tension,iterations,function);
+            return functions::minimize<type,SVFilter<type>,std::array<type, constants::max_factor>>(g, G_filter, table, factor,tension,iterations,function);
         }
 #endif
     public:
@@ -149,12 +140,10 @@ namespace mnamp {
             for (uint32_t j = 0; j < constants::max_stages; j++) {
                 oversampler[j].upsampler.setparams(1.0);
                 oversampler[j].downsampler.setparams(1.0);
-                oversampler_poly[j].upsampler.setparams(1.0);
-                oversampler_poly[j].downsampler.setparams(1.0);
             }
-            highpass_filter_parameters.setparams(70.0/sr, 0.5, 1.0);
-            gains_filter_parameters.setparams(2400.0/sr, 0.5, 1.0);
-            lowpass_filter_parameters.setparams(0.25, 0.5, 1.0);
+            highpass_filter_parameters.setparams(70.0/sr, 0.707, 1.0);
+            gains_filter_parameters.setparams(5200.0/sr, 0.5, 1.0);
+            lowpass_filter_parameters.setparams(0.35, 0.5, 1.0);
         }
         void inline run(const uint32_t n) {
             for (uint32_t i = 0; i < constants::ports; ++i)
@@ -167,12 +156,13 @@ namespace mnamp {
             const type gain2 = this->gain2();
             const uint32_t toggle = this->toggle();
             const type cutoff = this->cutoff();
+            const type bias = this->bias();
             const type drive1 = this->drive1();
             const type drive2 = this->drive2();
             const type resonance = this->resonance();
             const type eps = this->eps();
 #ifndef USE_LUT
-            const type tension = this->tension() * 1e-6;
+            const type tension = this->tension();
 #endif
             uint32_t const factor = this->factor();
             uint32_t const stages = this->stages();
@@ -201,32 +191,34 @@ namespace mnamp {
 
             // Preprocessing
             const uint32_t sampling = factor;
-            const uint32_t sampling4x = 8u;
             for (uint32_t j = 0; j < constants::max_stages; j++) {
-                splitter[j].setparams(cutoff / sr, resonance / (1+j), 1.0);
+                splitter[2*j].setparams(2000.0 / sr, 0.707, 1.0);
+                splitter[2*j+1].setparams(cutoff / sr, resonance, 1.0);
                 oversampler[j].upfactor = sampling;
                 oversampler[j].downfactor = sampling;
                 oversampler[j].upsampler.setparams(sampling/2.0);
                 oversampler[j].downsampler.setparams(sampling/2.0);
-                oversampler_poly[j].upfactor = sampling4x;
-                oversampler_poly[j].downfactor = sampling4x;
-                oversampler_poly[j].upsampler.setparams(sampling4x/2.0);
-                oversampler_poly[j].downsampler.setparams(sampling4x/2.0);
             }
 
             // Processing loop.
             for (uint32_t i = 0; i < n; ++i) {
                 type t = x[i];
 
-                splitter[0].process(t);
-                type bass = splitter[0].lp;
-                t = splitter[0].hp;
-                type high = t;
-
-                filterlp[0][0].process(t);
-                t = filterlp[0][0].pass();
-
                 for (uint32_t h = 0; h < stages; ++h) {
+
+                    splitter[2*h].process(t);
+                    type bass = splitter[2*h].lp;
+                    type high = splitter[2*h].hp;
+                    t = splitter[2*h].bp;
+
+                    type u = math::sgn<>(t);
+                    type d = 0.0;
+                    type w = functions::S<type>(std::abs(t), 1.0);
+                    if (u > 0.0)
+                        d = (w) * drive1 + (1.0 - w) * drive2;
+                    if (u < 0.0)
+                        d = drive2;
+                    t = t + std::abs(t)*bias*(1.0 - w);
 
                     oversampler[h].upsample(t * sampling);
 #ifdef USE_LUT
@@ -235,7 +227,7 @@ namespace mnamp {
                     for (uint32_t j = 0; j < sampling; j++) {
                         gains[h].process(s * g * gain);
                         s = 0.0;
-                        t = shaper(oversampler[h].buffer[j] * gains[h].lp, 1.);
+                        t = shaper(oversampler[h].buffer[j] * gains[h].lp, d);
                         oversampler[h].buffer[j] = t;
                     }
 #else
@@ -244,19 +236,18 @@ namespace mnamp {
                     for (uint32_t j = 0; j < sampling; j++) {
                         gains[h].process(s * g * gain);
                         s = 0.0;
-                        t = shaper(oversampler[h].buffer[j] * gains[h].lp, 1.);
+                        t = shaper(oversampler[h].buffer[j] * gains[h].lp, d);
                         oversampler[h].buffer[j] = t;
                     }
 #endif
                     t = oversampler[h].downsample();
 
-                    // Polynomial shaping
-                    oversampler_poly[h].upsample(t * sampling4x / 1.75);
-                    for (uint32_t j = 0; j < sampling4x; j++) {
-                        oversampler_poly[h].buffer[j] = poly(oversampler_poly[h].buffer[j], h, eps, drive1, drive2, stages);
-                    }
-                    t = oversampler_poly[h].downsample();
-                    // End polynomial shaping
+                    splitter[2*h+1].process(t);
+                    bass = splitter[2*h+1].lp;
+                    high = splitter[2*h+1].hp;
+                    t = splitter[2*h+1].bp;
+
+                    t = ((1. - mix) * bass + mix * high) * (1. - eps) + eps * t;
 
                     filterlp[h][1].process(t);
                     t = filterlp[h][1].pass();
@@ -264,8 +255,6 @@ namespace mnamp {
                     t = highpass[h].pass();
                     t = t * compensation;
                 }
-                t = (1. - eps) * high + eps * t;
-                t = (1. - mix) * bass + mix*t;
                 t = t * volume;
                 out[i] = t;
             }

@@ -17,9 +17,10 @@ namespace mndist {
     class mndist
     {
     private:
+        type sr;
         struct constants {
-            static const uint32_t max_stages {16u};
-            static const uint32_t max_factor {16u};
+            static const uint32_t max_stages {4u};
+            static const uint32_t max_factor {128u};
             struct names {
                 static const uint32_t out = 0u;
                 static const uint32_t in = 1u;
@@ -95,10 +96,9 @@ namespace mndist {
         
         resampler<type, elliptic<type>, constants::max_factor> oversampler[constants::max_stages];
         LowpassCascade filterlp[constants::max_stages][2u];
-        SVFilter<type> splitter[constants::max_stages];
+        SVFilter<type> splitter[2u*constants::max_stages];
         HighpassCascade highpass[constants::max_stages];
         SVFilter<type> gains[constants::max_stages];
-        type sr;
         filter_parameters<type, LowpassCascade> lowpass_filter_parameters;
         filter_parameters<type, HighpassCascade> highpass_filter_parameters;
         filter_parameters<type, SVFilter<type>> gains_filter_parameters;
@@ -119,9 +119,9 @@ namespace mndist {
             return lookup::lookup_table<type, lookup_parameters>::lookup(g, shaper);
         }
 #else
-        elliptic<type> G_filter;
+        SVFilter<type> G_filter;
         type inline G(type (*function)(type, type), type g, std::array<type, constants::max_factor> & table, const uint32_t factor = constants::max_factor, const type tension = 1e-6) {
-            return functions::minimize<type,elliptic<type>,std::array<type, constants::max_factor>>(g, G_filter, table, factor,tension,iterations,function);
+            return functions::minimize<type,SVFilter<type>,std::array<type, constants::max_factor>>(g, G_filter, table, factor,tension,iterations,function);
         }
 #endif
     public:
@@ -135,9 +135,9 @@ namespace mndist {
                 oversampler[j].upsampler.setparams(1.0);
                 oversampler[j].downsampler.setparams(1.0);
             }
-            highpass_filter_parameters.setparams(70.0/sr, 0.5, 1.0);
-            gains_filter_parameters.setparams(2400.0/sr, 0.5, 1.0);
-            lowpass_filter_parameters.setparams(0.25, 0.5, 1.0);
+            highpass_filter_parameters.setparams(70.0/sr, 0.707, 1.0);
+            gains_filter_parameters.setparams(5200.0/sr, 0.5, 1.0);
+            lowpass_filter_parameters.setparams(0.35, 0.5, 1.0);
         }
         void inline run(const uint32_t n) {
             for (uint32_t i = 0; i < constants::ports; ++i)
@@ -183,7 +183,8 @@ namespace mndist {
             // Preprocessing
             const uint32_t sampling = factor;
             for (uint32_t j = 0; j < constants::max_stages; j++) {
-                splitter[j].setparams(cutoff / sr, resonance / (1+j), 1.0);
+                splitter[2*j].setparams(cutoff / sr, resonance, 1.0);
+                splitter[2*j+1].setparams(cutoff / sr, resonance, 1.0);
                 oversampler[j].upsampler.setparams(sampling/2.0);
                 oversampler[j].downsampler.setparams(sampling/2.0);
                 oversampler[j].upfactor = sampling;
@@ -194,15 +195,12 @@ namespace mndist {
             for (uint32_t i = 0; i < n; ++i) {
                 type t = x[i];
 
-                splitter[0].process(t);
-                type bass = splitter[0].lp;
-                t = splitter[0].hp;
-                type high = t;
-
-                filterlp[0][0].process(t);
-                t = filterlp[0][0].pass();
-
                 for (uint32_t h = 0; h < stages; ++h) {
+
+                    splitter[2*h].process(t);
+                    type bass = splitter[2*h].lp;
+                    type high = splitter[2*h].hp;
+                    t = splitter[2*h].bp;
 
                     oversampler[h].upsample(t * sampling);
 #ifdef USE_LUT
@@ -225,15 +223,20 @@ namespace mndist {
                     }
 #endif
                     t = oversampler[h].downsample();
+
+                    splitter[2*h+1].process(t);
+                    bass = splitter[2*h+1].lp;
+                    high = splitter[2*h+1].hp;
+                    t = splitter[2*h+1].bp;
+
+                    t = ((1. - mix) * bass + mix * high) * (1. - eps) + eps * t;
+
                     filterlp[h][1].process(t);
                     t = filterlp[h][1].pass();
                     highpass[h].process(t);
                     t = highpass[h].pass();
-                
                     t = t * compensation;
                 }
-                t = (1. - eps) * high + eps * t;
-                t = (1. - mix) * bass + mix*t;
                 t = t * volume;
                 out[i] = t;
             }

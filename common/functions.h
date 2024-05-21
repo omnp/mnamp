@@ -30,8 +30,7 @@ namespace functions {
         uint32_t k = 0;
         type dlt = 0.0;
         type r = 1.0;
-        filter1.setparams(type(factor) / type(2.0), 1.0, 1.0);
-        filter1.save_state();
+        filter1.setparams(0.025, 0.707, 1.0);
         type t = 0.0;
         type s = 0.0;
         while (k < iterations) {
@@ -42,10 +41,10 @@ namespace functions {
                 type y = shaper(table[j] * g * r, 1.);
                 filter1.process(y);
                 s += std::abs(y);
-                t += std::abs(filter1.pass());
+                t += std::abs(filter1.lp);
             }
             k += 1u;
-            if (std::abs(s - t) > factor * tension) {
+            if (std::abs(s - t) / factor > tension) {
                 dlt = 1.0 / type(1u << k);
                 if (r - dlt >= 0.0)
                     r -= dlt;
@@ -54,6 +53,6 @@ namespace functions {
                 break;
             }
         }
-        return s > 0.0 ? r : 0.0;
+        return r;
     }
 }

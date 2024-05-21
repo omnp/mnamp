@@ -40,10 +40,10 @@ n = 48000#4096
 sr = float(n)
 f = 50.0
 sine = numpy.array(([math.sin(math.pi * f * 2.0 * (i/n))/f for i in range(0,n+1,1)]))
-delta = 10.0
-for _ in range(1,64):
-    f += delta
-    sine += numpy.array(([math.sin(math.pi * f * 2.0 * (i/n))/f for i in range(0,n+1,1)]))
+#delta = 10.0
+#for _ in range(1,64):
+#    f += delta
+#    sine += numpy.array(([math.sin(math.pi * f * 2.0 * (i/n))/f for i in range(0,n+1,1)]))
 out = array.array('f', [0.0,]*(n+1))
 amp = descriptor.instantiate(ffi.cast('LV2_Descriptor *', descriptor), sr, ffi.cast('const char *', 0), ffi.cast('const LV2_Feature * const*', 0))
 buffer_length = 32
@@ -54,9 +54,8 @@ ports = {
         'gain2':ffi.new('float *'),
         'toggle':ffi.new('float *'),
         'cutoff':ffi.new('float *'),
-        'volume':ffi.new('float *'),
         'stages':ffi.new('float *'),
-        'compensation':ffi.new('float *'),
+        'bias':ffi.new('float *'),
         'drive1':ffi.new('float *'),
         'drive2':ffi.new('float *'),
         'resonance':ffi.new('float *'),
@@ -64,6 +63,8 @@ ports = {
         'eps':ffi.new('float *'),
         'tension':ffi.new('float *'),
         'eq':ffi.new('float *'),
+        'compensation':ffi.new('float *'),
+        'volume':ffi.new('float *'),
         'shaping':ffi.new('float *'),
         }
 print(ports)
@@ -74,32 +75,34 @@ descriptor.connect_port(amp, 3, ports['gain2'])
 descriptor.connect_port(amp, 4, ports['toggle'])
 descriptor.connect_port(amp, 5, ports['cutoff'])
 descriptor.connect_port(amp, 6, ports['stages'])
-descriptor.connect_port(amp, 7, ports['drive1'])
-descriptor.connect_port(amp, 8, ports['drive2'])
-descriptor.connect_port(amp, 9, ports['resonance'])
-descriptor.connect_port(amp, 10, ports['factor'])
-descriptor.connect_port(amp, 11, ports['eps'])
-descriptor.connect_port(amp, 12, ports['tension'])
-descriptor.connect_port(amp, 133, ports['eq'])
-descriptor.connect_port(amp, 14, ports['compensation'])
-descriptor.connect_port(amp, 15, ports['volume'])
-descriptor.connect_port(amp, 16, ports['shaping'])
+descriptor.connect_port(amp, 7, ports['bias'])
+descriptor.connect_port(amp, 8, ports['drive1'])
+descriptor.connect_port(amp, 9, ports['drive2'])
+descriptor.connect_port(amp, 10, ports['resonance'])
+descriptor.connect_port(amp, 11, ports['factor'])
+descriptor.connect_port(amp, 12, ports['eps'])
+descriptor.connect_port(amp, 13, ports['tension'])
+descriptor.connect_port(amp, 14, ports['eq'])
+descriptor.connect_port(amp, 15, ports['compensation'])
+descriptor.connect_port(amp, 16, ports['volume'])
+descriptor.connect_port(amp, 17, ports['shaping'])
 descriptor.activate(amp)
-ports['gain1'][0] = ffi.cast('float', 3.0)
-ports['gain2'][0] = ffi.cast('float', 13.0)
+ports['gain1'][0] = ffi.cast('float', 0.0)
+ports['gain2'][0] = ffi.cast('float', 24.0)
 ports['toggle'][0] = ffi.cast('float', 1.0)
 ports['cutoff'][0] = ffi.cast('float', 1200.0)
-ports['volume'][0] = ffi.cast('float', -0.0)
-ports['stages'][0] = ffi.cast('float', ffi.cast('unsigned int', 12))
-ports['compensation'][0] = ffi.cast('float', -0.0)
-ports['drive1'][0] = ffi.cast('float', 0.707)
+ports['stages'][0] = ffi.cast('float', ffi.cast('unsigned int', 2))
+ports['bias'][0] = ffi.cast('float', 0.125)
+ports['drive1'][0] = ffi.cast('float', 0.909)
 ports['drive2'][0] = ffi.cast('float', 0.606)
 ports['resonance'][0] = ffi.cast('float', 0.707)
-ports['factor'][0] = ffi.cast('float', ffi.cast('unsigned int', 1))
-ports['eps'][0] = ffi.cast('float', 0.8)
-ports['tension'][0] = ffi.cast('float', 0.0)
-ports['eq'][0] = ffi.cast('float', 0.8)
-ports['shaping'][0] = ffi.cast('float', ffi.cast('unsigned int', 2))
+ports['factor'][0] = ffi.cast('float', ffi.cast('unsigned int', 128))
+ports['eps'][0] = ffi.cast('float', 0.7)
+ports['tension'][0] = ffi.cast('float', 0.1)
+ports['eq'][0] = ffi.cast('float', 0.7)
+ports['compensation'][0] = ffi.cast('float', 24.0)
+ports['volume'][0] = ffi.cast('float', 48.0)
+ports['shaping'][0] = ffi.cast('float', ffi.cast('unsigned int', 3))
 for i in range(0,len(sine)-1,buffer_length):
     for j in range(0, buffer_length):
         ports['in'][j] = sine[i+j]
@@ -111,8 +114,10 @@ descriptor.cleanup(amp)
 plot.figure()
 plot.plot(range(len(sine)), sine)
 plot.plot(range(len(out)), out)
+plot.show()
 F = numpy.fft.fft(out,n)
 F = F[:len(F)//2]
+plot.figure()
 plot.plot([i for i in range(len(F))], numpy.abs(F)/n)
 plot.show()
 
