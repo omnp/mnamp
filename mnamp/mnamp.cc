@@ -1,17 +1,11 @@
-#include <array>
 #include <lv2/core/lv2.h>
 #include "../common/math.h"
 #include "../common/onepole.h"
 #include "../common/svfilter.h"
-#include "../common/functions.h"
-#include "../common/resampler.h"
-#include "../common/sosfilters.h"
+//#include "../common/resampler.h"
+#include "../common/soft.h"
 
 namespace mnamp {
-#ifdef USE_LUT
-    #include "../lookup/lookup.h"
-    #include "../lookup/interpolate.h"
-#endif
 
     template<typename type, typename io_type>
     class mnamp
@@ -100,36 +94,27 @@ namespace mnamp {
         using Highpass = SVFilterAdapter<filters::highpass, type>;
         using HighpassCascade = filter_cascade<type, Highpass, 2u>;
         
-        resampler<type, elliptic<type>, constants::max_factor> oversampler[constants::max_stages];
-        LowpassCascade filterlp[constants::max_stages][2u];
-        SVFilter<type> splitter[2u*constants::max_stages];
-        HighpassCascade highpass[constants::max_stages];
+        //resampler<type, elliptic<type>, constants::max_factor> oversampler[constants::max_stages];
+        LowpassCascade lowpass[constants::max_stages];
+        SVFilter<type> splitter[constants::max_stages];
+        HighpassCascade highpass[2u*constants::max_stages];
         SVFilter<type> gains[constants::max_stages];
         filter_parameters<type, LowpassCascade> lowpass_filter_parameters;
         filter_parameters<type, HighpassCascade> highpass_filter_parameters;
         filter_parameters<type, SVFilter<type>> gains_filter_parameters;
-        const uint32_t iterations = 40u;
+        const uint32_t iterations = 56u;//40u;
+        Soft<type> soft[constants::max_stages]{Soft<type>(iterations)};
     public:
         explicit mnamp(type rate) : sr(rate) {
             for (uint32_t i = 0; i < constants::max_stages; i++) {
-                lowpass_filter_parameters.append(filterlp[i][0]);
-                lowpass_filter_parameters.append(filterlp[i][1]);
-                highpass_filter_parameters.append(highpass[i]);
+                lowpass_filter_parameters.append(lowpass[i]);
+                highpass_filter_parameters.append(highpass[2*i]);
+                highpass_filter_parameters.append(highpass[2*i+1]);
                 gains_filter_parameters.append(gains[i]);
             }
         }
         ~mnamp() {}
     private:
-#ifdef USE_LUT
-        type inline G(type g, type (*shaper)(type, type)) {
-            return lookup::lookup_table<type, lookup_parameters>::lookup(g, shaper);
-        }
-#else
-        SVFilter<type> G_filter;
-        type inline G(type (*function)(type, type), type g, std::array<type, constants::max_factor> & table, const uint32_t factor = constants::max_factor, const type tension = 1e-6) {
-            return functions::minimize<type,SVFilter<type>,std::array<type, constants::max_factor>>(g, G_filter, table, factor,tension,iterations,function);
-        }
-#endif
     public:
         void connect_port(const uint32_t port, void *data) {
             if (port < constants::ports)
@@ -137,13 +122,13 @@ namespace mnamp {
         }
         void activate() {
             gain_filter.setparams(300.0/sr, 1.0, 1.0);
-            for (uint32_t j = 0; j < constants::max_stages; j++) {
-                oversampler[j].upsampler.setparams(1.0);
-                oversampler[j].downsampler.setparams(1.0);
-            }
-            highpass_filter_parameters.setparams(70.0/sr, 0.707, 1.0);
-            gains_filter_parameters.setparams(5200.0/sr, 0.5, 1.0);
-            lowpass_filter_parameters.setparams(0.35, 0.5, 1.0);
+            //for (uint32_t j = 0; j < constants::max_stages; j++) {
+            //    oversampler[j].upsampler.setparams(1.0);
+            //    oversampler[j].downsampler.setparams(1.0);
+            //}
+            highpass_filter_parameters.setparams(50.0/sr, 0.707, 1.0);
+            gains_filter_parameters.setparams(5200.0/sr, 0.707, 1.0);
+            lowpass_filter_parameters.setparams(15000.0/sr, 0.707, 1.0);
         }
         void inline run(const uint32_t n) {
             for (uint32_t i = 0; i < constants::ports; ++i)
@@ -173,31 +158,14 @@ namespace mnamp {
             const type volume = this->volume();
             const uint32_t shaping = this->shaping();
 
-            type (*shaper)(type,type) = functions::NOOP;
-            switch (shaping) {
-                case 0:
-                    shaper = functions::NOOP;
-                    break;
-                case 1:
-                    shaper = functions::S;
-                    break;
-                case 2:
-                    shaper = functions::T;
-                    break;
-                case 3:
-                    shaper = functions::H;
-                    break;
-            }
-
             // Preprocessing
             const uint32_t sampling = factor;
             for (uint32_t j = 0; j < constants::max_stages; j++) {
-                splitter[2*j].setparams(2000.0 / sr, 0.707, 1.0);
-                splitter[2*j+1].setparams(cutoff / sr, resonance, 1.0);
-                oversampler[j].upfactor = sampling;
-                oversampler[j].downfactor = sampling;
-                oversampler[j].upsampler.setparams(sampling/2.0);
-                oversampler[j].downsampler.setparams(sampling/2.0);
+                splitter[j].setparams(cutoff / sr, resonance, 1.0);
+                //oversampler[j].upfactor = sampling;
+                //oversampler[j].downfactor = sampling;
+                //oversampler[j].upsampler.setparams(sampling/2.0);
+                //oversampler[j].downsampler.setparams(sampling/2.0);
             }
 
             // Processing loop.
@@ -206,53 +174,22 @@ namespace mnamp {
 
                 for (uint32_t h = 0; h < stages; ++h) {
 
-                    splitter[2*h].process(t);
-                    type bass = splitter[2*h].lp;
-                    type high = splitter[2*h].hp;
-                    t = splitter[2*h].bp;
+                    highpass[2*h].process(t);
+                    t = highpass[2*h].pass();
+                    lowpass[h].process(t);
+                    t = lowpass[h].pass();
 
-                    type u = math::sgn<>(t);
-                    type d = 0.0;
-                    type w = functions::S<type>(std::abs(t), 1.0);
-                    if (u > 0.0)
-                        d = (w) * drive1 + (1.0 - w) * drive2;
-                    if (u < 0.0)
-                        d = drive2;
-                    t = t + std::abs(t)*bias*(1.0 - w);
+                    t = soft[h](t, gain, bias);
 
-                    oversampler[h].upsample(t * sampling);
-#ifdef USE_LUT
-                    type g = G(gain, shaper);
-                    type s = sampling;
-                    for (uint32_t j = 0; j < sampling; j++) {
-                        gains[h].process(s * g * gain);
-                        s = 0.0;
-                        t = shaper(oversampler[h].buffer[j] * gains[h].lp, d);
-                        oversampler[h].buffer[j] = t;
-                    }
-#else
-                    type g = G(shaper, gain, oversampler[h].buffer, factor, tension);
-                    type s = sampling;
-                    for (uint32_t j = 0; j < sampling; j++) {
-                        gains[h].process(s * g * gain);
-                        s = 0.0;
-                        t = shaper(oversampler[h].buffer[j] * gains[h].lp, d);
-                        oversampler[h].buffer[j] = t;
-                    }
-#endif
-                    t = oversampler[h].downsample();
-
-                    splitter[2*h+1].process(t);
-                    bass = splitter[2*h+1].lp;
-                    high = splitter[2*h+1].hp;
-                    t = splitter[2*h+1].bp;
+                    splitter[h].process(t);
+                    type bass = splitter[h].lp;
+                    type high = splitter[h].hp;
+                    t = splitter[h].bp;
 
                     t = ((1. - mix) * bass + mix * high) * (1. - eps) + eps * t;
 
-                    filterlp[h][1].process(t);
-                    t = filterlp[h][1].pass();
-                    highpass[h].process(t);
-                    t = highpass[h].pass();
+                    highpass[2*h+1].process(t);
+                    t = highpass[2*h+1].pass();
                     t = t * compensation;
                 }
                 t = t * volume;
