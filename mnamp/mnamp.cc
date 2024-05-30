@@ -24,18 +24,14 @@ namespace mnamp {
                 static const uint32_t cutoff = 5u;
                 static const uint32_t stages = 6u;
                 static const uint32_t bias = 7u;
-                static const uint32_t drive1 = 8u;
-                static const uint32_t drive2 = 9u;
-                static const uint32_t resonance = 10u;
-                static const uint32_t factor = 11u;
-                static const uint32_t eps = 12u;
-                static const uint32_t tension = 13u;
-                static const uint32_t eq = 14u;
-                static const uint32_t compensation = 15u;
-                static const uint32_t volume = 16u;
-                static const uint32_t shaping = 17u;
+                static const uint32_t resonance = 8u;
+                static const uint32_t factor = 9u;
+                static const uint32_t eps = 10u;
+                static const uint32_t eq = 11u;
+                static const uint32_t compensation = 12u;
+                static const uint32_t volume = 13u;
             };
-            static const uint32_t ports = 18u;
+            static const uint32_t ports = 14u;
             enum struct conversion {none = 0u, linear = 1u, db = 2u};
         };
         io_type * ports[constants::ports];
@@ -77,16 +73,12 @@ namespace mnamp {
         port_parameter<constants::names::cutoff> cutoff{this};
         port_parameter<constants::names::stages, uint32_t, constants::conversion::none> stages{this};
         port_parameter<constants::names::bias> bias{this};
-        port_parameter<constants::names::drive1> drive1{this};
-        port_parameter<constants::names::drive2> drive2{this};
         port_parameter<constants::names::resonance> resonance{this};
         port_parameter<constants::names::factor, uint32_t, constants::conversion::none> factor{this};
         port_parameter<constants::names::eps> eps{this};
-        port_parameter<constants::names::tension> tension{this};
         port_parameter<constants::names::eq> eq{this};
         port_parameter<constants::names::compensation, type, constants::conversion::db> compensation{this};
         port_parameter<constants::names::volume, type, constants::conversion::db> volume{this};
-        port_parameter<constants::names::shaping, uint32_t, constants::conversion::none> shaping{this};
         OnePole<type> gain_filter;
 
         using Lowpass = SVFilterAdapter<filters::lowpass, type>;
@@ -142,24 +134,18 @@ namespace mnamp {
             const uint32_t toggle = this->toggle();
             const type cutoff = this->cutoff();
             const type bias = this->bias();
-            const type drive1 = this->drive1();
-            const type drive2 = this->drive2();
             const type resonance = this->resonance();
             const type eps = this->eps();
-#ifndef USE_LUT
-            const type tension = this->tension();
-#endif
-            uint32_t const factor = this->factor();
+            //uint32_t const factor = this->factor();
             uint32_t const stages = this->stages();
             gain_filter.process((1-toggle)*gain1 + (toggle)*gain2);
             const type gain = gain_filter.pass();
             const type mix = this->eq();
             const type compensation = this->compensation();
             const type volume = this->volume();
-            const uint32_t shaping = this->shaping();
 
             // Preprocessing
-            const uint32_t sampling = factor;
+            //const uint32_t sampling = factor;
             for (uint32_t j = 0; j < constants::max_stages; j++) {
                 splitter[j].setparams(cutoff / sr, resonance, 1.0);
                 //oversampler[j].upfactor = sampling;
