@@ -90,7 +90,7 @@ ports['factor'][0] = ffi.cast('float', ffi.cast('unsigned int', 128))
 ports['eps'][0] = ffi.cast('float', 0.7)
 ports['eq'][0] = ffi.cast('float', 0.7)
 ports['compensation'][0] = ffi.cast('float', 20.0)
-ports['volume'][0] = ffi.cast('float', 24.0)
+ports['volume'][0] = ffi.cast('float', -20.0)
 for i in range(0,len(sine)-1,buffer_length):
     for j in range(0, buffer_length):
         ports['in'][j] = sine[i+j]
