@@ -2,7 +2,8 @@
 #include "../common/math.h"
 #include "../common/onepole.h"
 #include "../common/svfilter.h"
-//#include "../common/resampler.h"
+#include "../common/resampler.h"
+#include "../common/sosfilters.h"
 #include "../common/soft.h"
 
 namespace mnamp {
@@ -86,7 +87,7 @@ namespace mnamp {
         using Highpass = SVFilterAdapter<filters::highpass, type>;
         using HighpassCascade = filter_cascade<type, Highpass, 2u>;
         
-        //resampler<type, elliptic<type>, constants::max_factor> oversampler[constants::max_stages];
+        resampler<type, elliptic<type>, constants::max_factor> oversampler[constants::max_stages];
         LowpassCascade lowpass[constants::max_stages];
         SVFilter<type> splitter[constants::max_stages];
         HighpassCascade highpass[2u*constants::max_stages];
@@ -95,7 +96,7 @@ namespace mnamp {
         filter_parameters<type, HighpassCascade> highpass_filter_parameters;
         filter_parameters<type, SVFilter<type>> gains_filter_parameters;
         const uint32_t iterations = 56u;//40u;
-        Soft<type> soft[constants::max_stages]{Soft<type>(iterations)};
+        Soft<type> soft[constants::max_stages];
     public:
         explicit mnamp(type rate) : sr(rate) {
             for (uint32_t i = 0; i < constants::max_stages; i++) {
@@ -114,10 +115,10 @@ namespace mnamp {
         }
         void activate() {
             gain_filter.setparams(300.0/sr, 1.0, 1.0);
-            //for (uint32_t j = 0; j < constants::max_stages; j++) {
-            //    oversampler[j].upsampler.setparams(1.0);
-            //    oversampler[j].downsampler.setparams(1.0);
-            //}
+            for (uint32_t j = 0; j < constants::max_stages; j++) {
+                oversampler[j].upsampler.setparams(1.0);
+                oversampler[j].downsampler.setparams(1.0);
+            }
             highpass_filter_parameters.setparams(50.0/sr, 0.707, 1.0);
             gains_filter_parameters.setparams(5200.0/sr, 0.707, 1.0);
             lowpass_filter_parameters.setparams(15000.0/sr, 0.707, 1.0);
@@ -136,7 +137,7 @@ namespace mnamp {
             const type bias = this->bias();
             const type resonance = this->resonance();
             const type eps = this->eps();
-            //uint32_t const factor = this->factor();
+            uint32_t const factor = this->factor();
             uint32_t const stages = this->stages();
             gain_filter.process((1-toggle)*gain1 + (toggle)*gain2);
             const type gain = gain_filter.pass();
@@ -145,13 +146,14 @@ namespace mnamp {
             const type volume = this->volume();
 
             // Preprocessing
-            //const uint32_t sampling = factor;
+            const uint32_t sampling = factor;
             for (uint32_t j = 0; j < constants::max_stages; j++) {
                 splitter[j].setparams(cutoff / sr, resonance, 1.0);
-                //oversampler[j].upfactor = sampling;
-                //oversampler[j].downfactor = sampling;
-                //oversampler[j].upsampler.setparams(sampling/2.0);
-                //oversampler[j].downsampler.setparams(sampling/2.0);
+                oversampler[j].upfactor = sampling;
+                oversampler[j].downfactor = sampling;
+                oversampler[j].upsampler.setparams(sampling/2.0);
+                oversampler[j].downsampler.setparams(sampling/2.0);
+                soft[j].set_samplerate(sr);
             }
 
             // Processing loop.
@@ -165,7 +167,12 @@ namespace mnamp {
                     lowpass[h].process(t);
                     t = lowpass[h].pass();
 
-                    t = soft[h](t, gain, bias);
+                    oversampler[h].upsample(t * sampling);
+                    for (uint32_t j = 0; j < sampling; ++j) {
+                        oversampler[h].buffer[j] = soft[h](oversampler[h].buffer[j], gain, bias);
+                    }
+                    t = oversampler[h].downsample();
+                    //t = soft[h](t, gain, bias);
 
                     splitter[h].process(t);
                     type bass = splitter[h].lp;
