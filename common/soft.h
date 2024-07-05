@@ -9,8 +9,8 @@ template<typename type> type f(type const x, type const a, type const b) {
 }
 
 template<typename type> type softabs(type const x) {
-    static const type mu = 1e-1;
-    return x * std::tanh(x/mu);
+    static const type mu = std::tanh(1.0);
+    return x * std::tanh(x)/mu;
 }
 
 template<typename type> type g(type const x, type const a, type const b) {
