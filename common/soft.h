@@ -15,8 +15,7 @@ template<typename type> type softabs(type const x) {
 
 template<typename type> type g(type const x, type const a, type const b) {
     type fx = f(x,a,0.0);
-    fx = fx / (1.0 + softabs(fx));
-    fx = fx + b;
+    fx = std::tanh(fx);
     return fx;
 }
 
@@ -66,10 +65,10 @@ protected:
         if (std::abs(d) > 2.0*M_PI) {
             d = math::sgn(d) * 2.0*M_PI;
         }
-        if (std::abs(d - this->d) < quantum * sr) {
-            d -= math::sgn(d) * quantum * sr;
-        }
         dy = d * dx;
+        if (dx >= 0.0) {
+            dy = dy * b * (1.0 - std::tanh(softabs(dx)));
+        }
         this->x += dx;
         this->y += dy;
         this->d = d;
