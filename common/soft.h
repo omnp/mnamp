@@ -62,8 +62,9 @@ protected:
         type y1 = this->y;
         type dy = y - y1;
         type d = dy / dx;
-        if (std::abs(d) > 2.0*M_PI) {
-            d = math::sgn(d) * 2.0*M_PI;
+        type const limit = 2.0 * M_PI;
+        if (std::abs(d) > limit) {
+            d = math::sgn(d) * limit;
         }
         dy = d * dx;
         if (dx >= 0.0) {
