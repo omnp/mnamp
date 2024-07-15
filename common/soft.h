@@ -18,7 +18,7 @@ template<typename type> type softabs(type const x) {
 }
 
 template<typename type> type g(type const x, type const a, type const b) {
-    type fx = f(x,a,0.0);
+    type fx = f(x,a,b*softabs(x));
     fx = soft(fx, 4.5);
     return fx;
 }
@@ -72,7 +72,7 @@ protected:
         }
         dy = d * dx;
         if (dx >= 0.0) {
-            dy = dy * b * (1.0 - std::tanh(softabs(dx)));
+            dy = dy * soft(softabs(dx));
         }
         this->x += dx;
         this->y += dy;
