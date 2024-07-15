@@ -8,14 +8,18 @@ template<typename type> type f(type const x, type const a, type const b) {
     return y;
 }
 
+template<typename type> type inline soft(type const x, type const p = 4.0) {
+    return x / std::pow((1.0 + std::pow(std::abs(x), p)), 1.0/p);
+}
+
 template<typename type> type softabs(type const x) {
-    static const type mu = std::tanh(1.0);
-    return x * std::tanh(x)/mu;
+    static const type mu = soft(1.0);
+    return x * soft(x)/mu;
 }
 
 template<typename type> type g(type const x, type const a, type const b) {
     type fx = f(x,a,0.0);
-    fx = std::tanh(fx);
+    fx = soft(fx, 4.5);
     return fx;
 }
 
