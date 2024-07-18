@@ -18,8 +18,8 @@ template<typename type> type softabs(type const x) {
 }
 
 template<typename type> type g(type const x, type const a, type const b) {
-    type fx = f(x,a,b*softabs(x));
-    fx = soft(fx, 4.5);
+    type fx = f(x,a,0.0);
+    fx = soft(fx, 2.0) + b * (1.0 - softabs(x));
     return fx;
 }
 
@@ -67,13 +67,8 @@ protected:
         type dy = y - y1;
         type d = dy / dx;
         type const limit = 2.0 * M_PI;
-        if (std::abs(d) > limit) {
-            d = math::sgn(d) * limit;
-        }
+        d = soft(d, 2.0) * limit;
         dy = d * dx;
-        if (dx >= 0.0) {
-            dy = dy * soft(softabs(dx));
-        }
         this->x += dx;
         this->y += dy;
         this->d = d;
