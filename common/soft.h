@@ -12,14 +12,24 @@ template<typename type> type inline soft(type const x, type const p = 4.0) {
     return x / std::pow((1.0 + std::pow(std::abs(x), p)), 1.0/p);
 }
 
-template<typename type> type softabs(type const x) {
-    static const type mu = soft(1.0);
-    return x * soft(x)/mu;
+template<typename type> type inline soft2(type const x, type const p = 4.0) {
+    const type mu = 1.0/std::pow(1.0 + 2.0*std::pow(std::abs(1.0), p), 1.0/p);
+    return x / std::pow(1.0 + 2.0*std::pow(std::abs(x), p), 1.0/p) / mu;
+}
+
+template<typename type> type softabs(type const x, type const p = 4.0) {
+    const type mu = soft(1.0, p);
+    return x * soft(x, p)/mu;
+}
+
+template<typename type> type soft2abs(type const x, type const p = 4.0) {
+    const type mu = soft2(1.0, p);
+    return x * soft2(x, p)/mu;
 }
 
 template<typename type> type g(type const x, type const a, type const b) {
     type fx = f(x,a,0.0);
-    fx = soft(fx, 2.0) + b * (1.0 - softabs(x));
+    fx = soft2(fx, 4.0) + b * (1.0 - soft2abs(x, 4.0));
     return fx;
 }
 
@@ -67,7 +77,7 @@ protected:
         type dy = y - y1;
         type d = dy / dx;
         type const limit = 2.0 * M_PI;
-        d = soft(d, 2.0) * limit;
+        d = soft2(d, 4.0) * limit;
         dy = d * dx;
         this->x += dx;
         this->y += dy;
