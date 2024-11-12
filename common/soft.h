@@ -95,4 +95,4 @@ private:
     type y;
     type d;
     type sr = 48000.0;
-}
+};
