@@ -27,10 +27,19 @@ template<typename type> type soft2abs(type const x, type const p = 4.0) {
     return x * soft2(x, p)/mu;
 }
 
+template<typename type> type h(type const x, type const a, type const b) {
+    type const base = std::log(2.0 + std::abs(x) - b);
+    type const c = std::exp(base * (2.0 + x - b));
+    type const d = std::exp(base * (2.0 - x + b));
+    return (c - d)/(c + d);
+}
+
 template<typename type> type g(type const x, type const a, type const b) {
     type fx = f(x,a,0.0);
-    fx = soft2(fx, 4.0) + b * (1.0 - soft2abs(x, 4.0));
-    return fx;
+    type const c = h(0.0, 0.0, b);
+    type const m = 1.0 + std::abs(c);
+    fx = h(fx, 0.0, b);
+    return (fx - c)/m;  
 }
 
 template<typename type> type integrate1_trapezoidal(type const u, type const v, type const a, type const b, type (*f)(type const x, type const a, type const b), uint32_t const n = 128u) {
@@ -71,13 +80,10 @@ protected:
             x_ += quantum;
             dx = x_ - x1_;
         }
-        //y = integrate1_trapezoidal(x1_, x1_ + dx, a, b, g, 64u) / dx;
         y = g(x_, a, b);
         type y1 = this->y;
         type dy = y - y1;
         type d = dy / dx;
-        type const limit = 2.0 * M_PI;
-        d = soft2(d, 4.0) * limit;
         dy = d * dx;
         this->x += dx;
         this->y += dy;
@@ -89,4 +95,4 @@ private:
     type y;
     type d;
     type sr = 48000.0;
-};
+}
