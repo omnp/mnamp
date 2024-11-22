@@ -86,7 +86,7 @@ namespace mnamp {
         using Highpass = SVFilterAdapter<filters::highpass, type>;
         using HighpassCascade = filter_cascade<type, Highpass, 2u>;
         
-        resampler<type, SVFilterAdapter<filters::filter_responses::lowpass, type>, constants::max_factor> oversampler[constants::max_stages];
+        resampler<type, filter_cascade<type, Lowpass, 4u>, constants::max_factor> oversampler[constants::max_stages];
         LowpassCascade lowpass[constants::max_stages];
         SVFilter<type> splitter[constants::max_stages];
         HighpassCascade highpass[2u*constants::max_stages];
@@ -94,7 +94,6 @@ namespace mnamp {
         filter_parameters<type, LowpassCascade> lowpass_filter_parameters;
         filter_parameters<type, HighpassCascade> highpass_filter_parameters;
         filter_parameters<type, SVFilter<type>> gains_filter_parameters;
-        Soft<type> soft[constants::max_stages];
     public:
         explicit mnamp(type rate) : sr(rate) {
             for (uint32_t i = 0; i < constants::max_stages; i++) {
@@ -117,7 +116,7 @@ namespace mnamp {
                 oversampler[j].upsampler.setparams(0.4, 0.707, 1.0);
                 oversampler[j].downsampler.setparams(0.4, 0.707, 1.0);
             }
-            highpass_filter_parameters.setparams(50.0/sr, 0.707, 1.0);
+            highpass_filter_parameters.setparams(25.0/sr, 0.707, 1.0);
             gains_filter_parameters.setparams(5200.0/sr, 0.707, 1.0);
             lowpass_filter_parameters.setparams(15000.0/sr, 0.707, 1.0);
         }
@@ -134,12 +133,12 @@ namespace mnamp {
             const type cutoff = this->cutoff();
             const type bias = this->bias();
             const type resonance = this->resonance();
-            const type eps = this->eps();
+            const type eps = std::sqrt(this->eps());
             uint32_t const factor = this->factor();
             uint32_t const stages = this->stages();
             gain_filter.process((1-toggle)*gain1 + (toggle)*gain2);
             const type gain = gain_filter.pass();
-            const type mix = this->eq();
+            const type mix = std::sqrt(this->eq());
             const type compensation = this->compensation();
             const type volume = this->volume();
 
@@ -151,7 +150,6 @@ namespace mnamp {
                 oversampler[j].downfactor = sampling;
                 oversampler[j].upsampler.setparams(0.4/sampling, 0.707, 1.0);
                 oversampler[j].downsampler.setparams(0.4/sampling, 0.707, 1.0);
-                soft[j].set_samplerate(sr);
             }
 
             // Processing loop.
@@ -167,7 +165,7 @@ namespace mnamp {
 
                     oversampler[h].upsample(t);
                     for (uint32_t j = 0; j < sampling; ++j) {
-                        oversampler[h].buffer[j] = soft[h](oversampler[h].buffer[j], gain, bias);
+                        oversampler[h].buffer[j] = g<type>(oversampler[h].buffer[j] * sampling, gain, bias);
                     }
                     t = oversampler[h].downsample();
 
@@ -176,7 +174,7 @@ namespace mnamp {
                     type high = splitter[h].hp;
                     t = splitter[h].bp;
 
-                    t = ((1. - mix) * bass + mix * high) * (1. - eps) + eps * t;
+                    t = (1. - mix) * (bass * (1. - eps) + eps * t) + mix * (high * (1. - eps) + eps * t);
 
                     highpass[2*h+1].process(t);
                     t = highpass[2*h+1].pass();
