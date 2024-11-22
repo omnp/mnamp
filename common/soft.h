@@ -1,20 +1,18 @@
 #include <cmath>
-#include <cstdint>
 #include "math.h"
+#pragma once
 
-template<typename type> type f(type const x, type const a, type const b) {
-    /** Amplify with bias */
-    type y = a*(x+b);
-    return y;
+template<typename type> type inline pow(type const x, type const p) {
+    return std::exp(p * std::log(x));
 }
 
 template<typename type> type inline soft(type const x, type const p = 4.0) {
-    return x / std::pow((1.0 + std::pow(std::abs(x), p)), 1.0/p);
+    return x / pow(1.0 + pow(std::abs(x), p), 1.0/p);
 }
 
 template<typename type> type inline soft2(type const x, type const p = 4.0) {
-    const type mu = 1.0/std::pow(1.0 + 2.0*std::pow(std::abs(1.0), p), 1.0/p);
-    return x / std::pow(1.0 + 2.0*std::pow(std::abs(x), p), 1.0/p) / mu;
+    const type mu = soft(1.0, p);
+    return soft(x, p)/mu;
 }
 
 template<typename type> type softabs(type const x, type const p = 4.0) {
@@ -27,19 +25,25 @@ template<typename type> type soft2abs(type const x, type const p = 4.0) {
     return x * soft2(x, p)/mu;
 }
 
-template<typename type> type h(type const x, type const a, type const b) {
-    type const base = std::log(2.0 + std::abs(x) - b);
-    type const c = std::exp(base * (2.0 + x - b));
-    type const d = std::exp(base * (2.0 - x + b));
-    return (c - d)/(c + d);
+template<typename type> type f(type const x, type const a, type const b) {
+    /** Amplify with bias */
+    type y = a*(x+softabs(x)*b);
+    return y;
 }
 
-template<typename type> type g(type const x, type const a, type const b) {
-    type fx = f(x,a,0.0);
-    type const c = h(0.0, 0.0, b);
+template<typename type> type h(type const x, type const a, type const b, type const p = 4.0) {
+    type const fx = f(x, a, b);
+    type const base = 2.0 + std::abs(x) - b;
+    type const c = pow(base, fx);
+    type const d = pow(base, -fx);
+    return 1.0/(1.0 + d/c) - 1.0/(c/d + 1.0);
+ }
+
+template<typename type> type g(type const x, type const a, type const b, type const p = 4.0) {
+    type const c = h(0.0, a, b, p);
     type const m = 1.0 + std::abs(c);
-    fx = h(fx, 0.0, b);
-    return (fx - c)/m;  
+    type const fx = h(x, a, b, p);
+    return (fx - c)/m;
 }
 
 template<typename type> type integrate1_trapezoidal(type const u, type const v, type const a, type const b, type (*f)(type const x, type const a, type const b), uint32_t const n = 128u) {
@@ -80,7 +84,7 @@ protected:
             x_ += quantum;
             dx = x_ - x1_;
         }
-        y = g(x_, a, b);
+        y = g(x_, a, b, 4.0);
         type y1 = this->y;
         type dy = y - y1;
         type d = dy / dx;
