@@ -45,17 +45,3 @@ template<typename type> type g(type const x, type const a, type const b, type co
     type const fx = h(x, a, b, p);
     return (fx - c)/m;
 }
-
-template<typename type> type integrate1_trapezoidal(type const u, type const v, type const a, type const b, type (*f)(type const x, type const a, type const b), uint32_t const n = 128u) {
-    type const d = (v - u) / type(n);
-    type t = f(u, a, b);
-    type I = 0.0;
-    for (uint32_t i = 1u; i <= n; i++) {
-        type x, y;
-        x = u + type(i) * d;
-        y = f(x, a, b);
-        I += (y + t);
-        t = y;
-    }
-    return 0.5 * I * d;
-}
