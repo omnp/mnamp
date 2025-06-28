@@ -1,9 +1,5 @@
 #include <lv2/core/lv2.h>
-#include "../common/math.h"
 #include "../common/onepole.h"
-#include "../common/svfilter.h"
-#include "../common/resampler.h"
-#include "../common/soft.h"
 
 namespace mnamp {
 
@@ -13,25 +9,21 @@ namespace mnamp {
     private:
         type sr;
         struct constants {
-            static const uint32_t max_stages {4u};
-            static const uint32_t max_factor {128u};
+            static const uint32_t max_stages {32u};
             struct names {
                 static const uint32_t out = 0u;
                 static const uint32_t in = 1u;
-                static const uint32_t gain1 = 2u;
-                static const uint32_t gain2 = 3u;
-                static const uint32_t toggle = 4u;
-                static const uint32_t cutoff = 5u;
-                static const uint32_t stages = 6u;
-                static const uint32_t bias = 7u;
-                static const uint32_t resonance = 8u;
-                static const uint32_t factor = 9u;
-                static const uint32_t eps = 10u;
-                static const uint32_t eq = 11u;
-                static const uint32_t compensation = 12u;
-                static const uint32_t volume = 13u;
+                static const uint32_t cutoff = 2u;
+                static const uint32_t stages = 3u;
+                static const uint32_t bias = 4u;
+                static const uint32_t resonance = 5u;
+                static const uint32_t eps = 6u;
+                static const uint32_t eq = 7u;
+                static const uint32_t compensation = 8u;
+                static const uint32_t volume = 9u;
+                static const uint32_t gain = 10u;
             };
-            static const uint32_t ports = 14u;
+            static const uint32_t ports = 11u;
             enum struct conversion {none = 0u, linear = 1u, db = 2u};
         };
         io_type * ports[constants::ports];
@@ -43,11 +35,11 @@ namespace mnamp {
         template <uint32_t name = constants::ports, typename return_type = type, const typename constants::conversion c = constants::conversion::linear>
         struct port_parameter {
             explicit port_parameter(mnamp const * m) : m{m} {
-                input_filter.setparams(50.0/m->sr, 1.0, 1.0);
+                input_filter.setparams(1000.0, 0.707, m->sr);
             }
             mnamp const * m;
             uint32_t const index = name;
-            OnePole<type> input_filter;
+            OnePoleZD<type> input_filter;
             return_type operator()() {
                 type in = *m->port(name);
                 switch (c) {
@@ -67,41 +59,35 @@ namespace mnamp {
             }
         };
 
-        port_parameter<constants::names::gain1, type, constants::conversion::db> gain1{this};
-        port_parameter<constants::names::gain2, type, constants::conversion::db> gain2{this};
-        port_parameter<constants::names::toggle, uint32_t, constants::conversion::none> toggle{this};
         port_parameter<constants::names::cutoff> cutoff{this};
         port_parameter<constants::names::stages, uint32_t, constants::conversion::none> stages{this};
         port_parameter<constants::names::bias> bias{this};
         port_parameter<constants::names::resonance> resonance{this};
-        port_parameter<constants::names::factor, uint32_t, constants::conversion::none> factor{this};
         port_parameter<constants::names::eps> eps{this};
         port_parameter<constants::names::eq> eq{this};
         port_parameter<constants::names::compensation, type, constants::conversion::db> compensation{this};
         port_parameter<constants::names::volume, type, constants::conversion::db> volume{this};
-        OnePole<type> gain_filter;
+        port_parameter<constants::names::gain> gain{this};
 
-        using Lowpass = SVFilterAdapter<filters::lowpass, type>;
-        using LowpassCascade = filter_cascade<type, Lowpass, 2u>;
-        using Highpass = SVFilterAdapter<filters::highpass, type>;
-        using HighpassCascade = filter_cascade<type, Highpass, 2u>;
-        
-        resampler<type, filter_cascade<type, Lowpass, 4u>, constants::max_factor> oversampler[constants::max_stages];
-        LowpassCascade lowpass[constants::max_stages];
-        SVFilter<type> splitter[constants::max_stages];
-        HighpassCascade highpass[2u*constants::max_stages];
-        SVFilter<type> gains[constants::max_stages];
+        using Lowpass = OnePoleZD<type>;
+        using LowpassCascade = filter_cascade<type, Lowpass, 6u>;
+        using Highpass = OnePoleHigh<OnePoleZD<type>>;
+        using HighpassCascade = filter_cascade<type, Highpass, 6u>;
+
+        LowpassCascade lowpass;
+        LowpassCascade splitter;
+        HighpassCascade highpass[1u+constants::max_stages];
         filter_parameters<type, LowpassCascade> lowpass_filter_parameters;
         filter_parameters<type, HighpassCascade> highpass_filter_parameters;
-        filter_parameters<type, SVFilter<type>> gains_filter_parameters;
+
+        LowpassCascade adjust[constants::max_stages];
+        type const max_gain = 24.0;
+
     public:
         explicit mnamp(type rate) : sr(rate) {
-            for (uint32_t i = 0; i < constants::max_stages; i++) {
-                lowpass_filter_parameters.append(lowpass[i]);
-                highpass_filter_parameters.append(highpass[2*i]);
-                highpass_filter_parameters.append(highpass[2*i+1]);
-                gains_filter_parameters.append(gains[i]);
-            }
+            lowpass_filter_parameters.append(lowpass);
+            for (uint32_t h = 0; h < 1u + constants::max_stages; h++)
+                highpass_filter_parameters.append(highpass[h]);
         }
         ~mnamp() {}
     private:
@@ -111,14 +97,11 @@ namespace mnamp {
                 ports[port] = (io_type *) data;
         }
         void activate() {
-            gain_filter.setparams(300.0/sr, 1.0, 1.0);
-            for (uint32_t j = 0; j < constants::max_stages; j++) {
-                oversampler[j].upsampler.setparams(0.4, 0.707, 1.0);
-                oversampler[j].downsampler.setparams(0.4, 0.707, 1.0);
+            highpass_filter_parameters.setparams(15.0, 0.404, sr);
+            lowpass_filter_parameters.setparams(19000.0, 0.707, sr);
+            for (uint32_t h = 0; h < constants::max_stages; h++) {
+                adjust[h].setparams(0.5*sr/8, 0.606, 1.0);
             }
-            highpass_filter_parameters.setparams(25.0/sr, 0.707, 1.0);
-            gains_filter_parameters.setparams(5200.0/sr, 0.707, 1.0);
-            lowpass_filter_parameters.setparams(15000.0/sr, 0.707, 1.0);
         }
         void inline run(const uint32_t n) {
             for (uint32_t i = 0; i < constants::ports; ++i)
@@ -127,58 +110,54 @@ namespace mnamp {
             // Ports
             io_type * const out = ports[constants::names::out];
             const io_type * const x = ports[constants::names::in];
-            const type gain1 = this->gain1();
-            const type gain2 = this->gain2();
-            const uint32_t toggle = this->toggle();
             const type cutoff = this->cutoff();
             const type bias = this->bias();
             const type resonance = this->resonance();
             const type eps = std::sqrt(this->eps());
-            uint32_t const factor = this->factor();
             uint32_t const stages = this->stages();
-            gain_filter.process((1-toggle)*gain1 + (toggle)*gain2);
-            const type gain = gain_filter.pass();
             const type mix = std::sqrt(this->eq());
             const type compensation = this->compensation();
             const type volume = this->volume();
+            const type gain = this->gain();
 
             // Preprocessing
-            const uint32_t sampling = factor;
-            for (uint32_t j = 0; j < constants::max_stages; j++) {
-                splitter[j].setparams(cutoff / sr, resonance, 1.0);
-                oversampler[j].upfactor = sampling;
-                oversampler[j].downfactor = sampling;
-                oversampler[j].upsampler.setparams(0.4/sampling, 0.707, 1.0);
-                oversampler[j].downsampler.setparams(0.4/sampling, 0.707, 1.0);
-            }
+            splitter.setparams(cutoff, resonance * 1000.0 / (1.0 + cutoff), sr);
+            highpass_filter_parameters.setparams(15.0/sr, 0.404, 1.0);
+            lowpass_filter_parameters.setparams(19000.0/sr, 0.707, 1.0);
 
             // Processing loop.
             for (uint32_t i = 0; i < n; ++i) {
                 type t = x[i];
 
+                highpass[0].process(t);
+                t = highpass[0].pass();
+                lowpass.process(t);
+                t = lowpass.pass();
+
+                splitter.process(t);
+                type bass = splitter.pass();
+                type high = t - bass;
+                bass = (1. - mix) * bass + mix * high;
+                t = bass;
+
                 for (uint32_t h = 0; h < stages; ++h) {
-
-                    highpass[2*h].process(t);
-                    t = highpass[2*h].pass();
-                    lowpass[h].process(t);
-                    t = lowpass[h].pass();
-
-                    oversampler[h].upsample(t);
-                    for (uint32_t j = 0; j < sampling; ++j) {
-                        oversampler[h].buffer[j] = g<type>(oversampler[h].buffer[j] * sampling, gain, bias);
-                    }
-                    t = oversampler[h].downsample();
-
-                    splitter[h].process(t);
-                    type bass = splitter[h].lp;
-                    type high = splitter[h].hp;
-                    t = splitter[h].bp;
-
-                    t = (1. - mix) * (bass * (1. - eps) + eps * t) + mix * (high * (1. - eps) + eps * t);
-
-                    highpass[2*h+1].process(t);
-                    t = highpass[2*h+1].pass();
+                    type a = std::abs(t);
+                    a = a/(1.0 + a);
+                    type b = a;
+                    a = 1.0 - a;
+                    adjust[h].setparams(0.5 * sr/5 * a, 0.606, 1.0);
+                    adjust[h].process(t);
+                    type lo = adjust[h].pass();
+                    t = lo;
+                    t = t + std::abs(t) * bias;
+                    t = t / 2.0;
+                    // type ga = max_gain - gain;
+                    type ga = max_gain - gain;
+                    t = ((5.0+ga)/(4.0+ga))*t - (t*t*t*t*t)/(4.0+ga);
+                    t = (1. - eps * b) * lo + eps * b * t;
                     t = t * compensation;
+                    highpass[h+1].process(t);
+                    t = highpass[h+1].pass();
                 }
                 t = t * volume;
                 out[i] = t;

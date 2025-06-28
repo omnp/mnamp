@@ -36,9 +36,9 @@ import array
 import numpy
 import matplotlib.pyplot as plot
 
-n = 48000#4096
+n = 48000
 sr = float(n)
-f = 50.0
+f = 1.0
 sine = numpy.array(([0.0 for _ in range(n)] + [math.sin(math.pi * f * 2.0 * (i/n))/f for i in range(0,n+1,1)]))
 #delta = 10.0
 #for _ in range(1,64):
@@ -50,46 +50,37 @@ buffer_length = 32
 ports = {
         'out':ffi.new('float [{}]'.format(buffer_length)),
         'in':ffi.new('float [{}]'.format(buffer_length)),
-        'gain1':ffi.new('float *'),
-        'gain2':ffi.new('float *'),
-        'toggle':ffi.new('float *'),
         'cutoff':ffi.new('float *'),
         'stages':ffi.new('float *'),
         'bias':ffi.new('float *'),
         'resonance':ffi.new('float *'),
-        'factor':ffi.new('float *'),
         'eps':ffi.new('float *'),
         'eq':ffi.new('float *'),
         'compensation':ffi.new('float *'),
         'volume':ffi.new('float *'),
+        'gain':ffi.new('float *'),
         }
 print(ports)
 descriptor.connect_port(amp, 0, ports['out'])
 descriptor.connect_port(amp, 1, ports['in'])
-descriptor.connect_port(amp, 2, ports['gain1'])
-descriptor.connect_port(amp, 3, ports['gain2'])
-descriptor.connect_port(amp, 4, ports['toggle'])
-descriptor.connect_port(amp, 5, ports['cutoff'])
-descriptor.connect_port(amp, 6, ports['stages'])
-descriptor.connect_port(amp, 7, ports['bias'])
-descriptor.connect_port(amp, 8, ports['resonance'])
-descriptor.connect_port(amp, 9, ports['factor'])
-descriptor.connect_port(amp, 10, ports['eps'])
-descriptor.connect_port(amp, 11, ports['eq'])
-descriptor.connect_port(amp, 12, ports['compensation'])
-descriptor.connect_port(amp, 13, ports['volume'])
+descriptor.connect_port(amp, 2, ports['cutoff'])
+descriptor.connect_port(amp, 3, ports['stages'])
+descriptor.connect_port(amp, 4, ports['bias'])
+descriptor.connect_port(amp, 5, ports['resonance'])
+descriptor.connect_port(amp, 6, ports['eps'])
+descriptor.connect_port(amp, 7, ports['eq'])
+descriptor.connect_port(amp, 8, ports['compensation'])
+descriptor.connect_port(amp, 9, ports['volume'])
+descriptor.connect_port(amp, 10, ports['gain'])
 descriptor.activate(amp)
-ports['gain1'][0] = ffi.cast('float', 0.0)
-ports['gain2'][0] = ffi.cast('float', 48.0)
-ports['toggle'][0] = ffi.cast('float', 1.0)
-ports['cutoff'][0] = ffi.cast('float', 900.0)
-ports['stages'][0] = ffi.cast('float', ffi.cast('unsigned int', 2))
+ports['gain'][0] = ffi.cast('float', 24.0)
+ports['cutoff'][0] = ffi.cast('float', 2400.0)
+ports['stages'][0] = ffi.cast('float', ffi.cast('unsigned int', 24))
 ports['bias'][0] = ffi.cast('float', 0.468)
 ports['resonance'][0] = ffi.cast('float', 0.707)
-ports['factor'][0] = ffi.cast('float', ffi.cast('unsigned int', 2))
 ports['eps'][0] = ffi.cast('float', 0.707)
 ports['eq'][0] = ffi.cast('float', 0.509)
-ports['compensation'][0] = ffi.cast('float', -0.0)
+ports['compensation'][0] = ffi.cast('float', 1.5)
 ports['volume'][0] = ffi.cast('float', -0.0)
 for i in range(0,len(sine)-1,buffer_length):
     for j in range(0, buffer_length):
@@ -108,4 +99,3 @@ F = F[:len(F)//2]
 plot.figure()
 plot.plot([i for i in range(len(F))], numpy.abs(F)/n)
 plot.show()
-
