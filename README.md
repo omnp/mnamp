@@ -24,4 +24,4 @@ There is currently only available the generic GUI controls possibly provided by 
 Control parameters (this section needs a bit of updating)
 -----------------------------------------------------------
 
-There is a gain control and factor for oversampling.
+There is a gain control and some other controls.
