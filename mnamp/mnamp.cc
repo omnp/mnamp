@@ -111,7 +111,7 @@ namespace mnamp {
             io_type * const out = ports[constants::names::out];
             const io_type * const x = ports[constants::names::in];
             const type cutoff = this->cutoff();
-            const type bias = this->bias();
+            // const type bias = this->bias();
             const type resonance = this->resonance();
             const type eps = std::sqrt(this->eps());
             uint32_t const stages = this->stages();
@@ -143,18 +143,14 @@ namespace mnamp {
                 for (uint32_t h = 0; h < stages; ++h) {
                     type a = std::abs(t);
                     a = a/(1.0 + a);
-                    type b = a;
                     a = 1.0 - a;
-                    adjust[h].setparams(0.5 * sr/5 * a, 0.606, 1.0);
+                    adjust[h].setparams(0.5 * sr/3 * a, 0.606, 1.0);
                     adjust[h].process(t);
                     type lo = adjust[h].pass();
                     t = lo;
-                    t = t + std::abs(t) * bias;
-                    t = t / 2.0;
-                    // type ga = max_gain - gain;
-                    type ga = max_gain - gain;
-                    t = ((5.0+ga)/(4.0+ga))*t - (t*t*t*t*t)/(4.0+ga);
-                    t = (1. - eps * b) * lo + eps * b * t;
+                    type ga = (max_gain - gain) * std::log(1.0 + a);
+                    t = ((3.0+ga)/(2.0+ga))*t - (t*t*t)/(2.0+ga);
+                    t = (1. - eps) * lo + eps * t;
                     t = t * compensation;
                     highpass[h+1].process(t);
                     t = highpass[h+1].pass();
