@@ -38,12 +38,8 @@ import matplotlib.pyplot as plot
 
 n = 48000
 sr = float(n)
-f = 1.0
-sine = numpy.array(([0.0 for _ in range(n)] + [math.sin(math.pi * f * 2.0 * (i/n))/f for i in range(0,n+1,1)]))
-#delta = 10.0
-#for _ in range(1,64):
-#    f += delta
-#    sine += numpy.array(([math.sin(math.pi * f * 2.0 * (i/n))/f for i in range(0,n+1,1)]))
+f = 110.0
+sine = numpy.array(([0.0 for _ in range(n)] + [math.sin(math.pi * f * 2.0 * (i/n)) for i in range(0,n+1,1)]))
 out = array.array('f', [0.0,]*(2*n+1))
 amp = descriptor.instantiate(ffi.cast('LV2_Descriptor *', descriptor), sr, ffi.cast('const char *', 0), ffi.cast('const LV2_Feature * const*', 0))
 buffer_length = 32
@@ -73,14 +69,14 @@ descriptor.connect_port(amp, 8, ports['compensation'])
 descriptor.connect_port(amp, 9, ports['volume'])
 descriptor.connect_port(amp, 10, ports['gain'])
 descriptor.activate(amp)
-ports['gain'][0] = ffi.cast('float', 24.0)
-ports['cutoff'][0] = ffi.cast('float', 2400.0)
-ports['stages'][0] = ffi.cast('float', ffi.cast('unsigned int', 24))
-ports['bias'][0] = ffi.cast('float', 0.468)
-ports['resonance'][0] = ffi.cast('float', 0.707)
+ports['gain'][0] = ffi.cast('float', 23.59)
+ports['cutoff'][0] = ffi.cast('float', 1994.0)
+ports['stages'][0] = ffi.cast('float', ffi.cast('unsigned int', 16))
+ports['bias'][0] = ffi.cast('float', 0.0)
+ports['resonance'][0] = ffi.cast('float', 1.707)
 ports['eps'][0] = ffi.cast('float', 0.707)
 ports['eq'][0] = ffi.cast('float', 0.509)
-ports['compensation'][0] = ffi.cast('float', 1.5)
+ports['compensation'][0] = ffi.cast('float', 0.0)
 ports['volume'][0] = ffi.cast('float', -0.0)
 for i in range(0,len(sine)-1,buffer_length):
     for j in range(0, buffer_length):
