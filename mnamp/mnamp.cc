@@ -1,7 +1,78 @@
+#include <functional>
 #include <lv2/core/lv2.h>
 #include "../common/onepole.h"
 
 namespace mnamp {
+
+    namespace curves {
+        template<typename type> type f0(type x, type level=0.0) {
+            return x;
+        }
+        template<typename type> type f1(type x, type level=0.0) {
+            return (2.+level)*x/(1.+level)-x*std::abs(x)/(1.+level);
+        }
+        template<typename type> type f2(type x, type level=0.0) {
+            return (3.+level)*x/(2.+level)-x*x*x/(2.+level);
+        }
+        template<typename type>
+        auto combine(std::function<type(type, type)> below,
+                     std::function<type(type, type)> above) {
+            return [below, above](type x, type level=0.0) {
+                type t = 0.5*(1.0 + x); return (1.0-t)*below(x, level)+t*above(x, level);
+            };
+        }
+        template <typename type>
+        auto invert(type (*f)(type, type)) {
+            return [&f](type x, type level=0.0) {
+                x = -x;
+                type y = f(x, level);
+                y = -y;
+                return y;
+            };
+        }
+    };
+    template <typename type> type clip(type x, type min, type max) {
+        if (x < min) {
+            x = min;
+        }
+        if (x > max) {
+            x = max;
+        }
+        return x;
+    }
+    template <typename type>
+    class Limit
+    {
+    private:
+        OnePoleZD<type> lowpass;
+        OnePoleZD<type> gain;
+    public:
+        Limit() {
+            lowpass.setparams(0.5, 1.0, 1.0);
+            gain.setparams(0.5, 1.0, 1.0);
+        }
+        type process(type const x) {
+            type gain_ = 1.0;
+            if (std::abs(x) > 1.0) {
+                gain_ = std::fmin<type>(gain.pass(), 1.0 / std::abs(x));
+            }
+            type y = gain_ * x;
+            lowpass.process(x);
+            if (std::abs(lowpass.pass()) <= 0.0) {
+                gain.process(1.0);
+            }
+            else {
+                gain.process(gain_);
+            }
+            return y;
+        }
+        void set_lowpass_params(type k, type q, type sr) {
+            lowpass.setparams(k, q, sr);
+        }
+        void set_gain_params(type k, type q, type sr) {
+            gain.setparams(k, q, sr);
+        }
+    };
 
     template<typename type, typename io_type>
     class mnamp
@@ -15,15 +86,14 @@ namespace mnamp {
                 static const uint32_t in = 1u;
                 static const uint32_t cutoff = 2u;
                 static const uint32_t stages = 3u;
-                static const uint32_t bias = 4u;
-                static const uint32_t resonance = 5u;
-                static const uint32_t eps = 6u;
-                static const uint32_t eq = 7u;
-                static const uint32_t compensation = 8u;
-                static const uint32_t volume = 9u;
-                static const uint32_t gain = 10u;
+                static const uint32_t resonance = 4u;
+                static const uint32_t eps = 5u;
+                static const uint32_t eq = 6u;
+                static const uint32_t compensation = 7u;
+                static const uint32_t volume = 8u;
+                static const uint32_t gain = 9u;
             };
-            static const uint32_t ports = 11u;
+            static const uint32_t ports = 10u;
             enum struct conversion {none = 0u, linear = 1u, db = 2u};
         };
         io_type * ports[constants::ports];
@@ -61,7 +131,6 @@ namespace mnamp {
 
         port_parameter<constants::names::cutoff> cutoff{this};
         port_parameter<constants::names::stages, uint32_t, constants::conversion::none> stages{this};
-        port_parameter<constants::names::bias> bias{this};
         port_parameter<constants::names::resonance> resonance{this};
         port_parameter<constants::names::eps> eps{this};
         port_parameter<constants::names::eq> eq{this};
@@ -82,6 +151,8 @@ namespace mnamp {
 
         LowpassCascade adjust[constants::max_stages];
         type const max_gain = 24.0;
+        type const downfilter_factor = 4.0;
+        Limit<type> limiters[constants::max_stages];
 
     public:
         explicit mnamp(type rate) : sr(rate) {
@@ -101,6 +172,8 @@ namespace mnamp {
             lowpass_filter_parameters.setparams(19000.0, 0.707, sr);
             for (uint32_t h = 0; h < constants::max_stages; h++) {
                 adjust[h].setparams(0.5*sr/8, 0.606, 1.0);
+                limiters[h].set_lowpass_params(10.0, 1.0, sr);
+                limiters[h].set_gain_params(10.0, 1.0, sr);
             }
         }
         void inline run(const uint32_t n) {
@@ -111,7 +184,6 @@ namespace mnamp {
             io_type * const out = ports[constants::names::out];
             const io_type * const x = ports[constants::names::in];
             const type cutoff = this->cutoff();
-            // const type bias = this->bias();
             const type resonance = this->resonance();
             const type eps = std::sqrt(this->eps());
             uint32_t const stages = this->stages();
@@ -141,15 +213,16 @@ namespace mnamp {
                 t = bass;
 
                 for (uint32_t h = 0; h < stages; ++h) {
+                    t = limiters[h].process(t);
                     type a = std::abs(t);
                     a = a/(1.0 + a);
                     a = 1.0 - a;
-                    adjust[h].setparams(0.5 * sr/3 * a, 0.606, 1.0);
+                    adjust[h].setparams(0.5 * sr/downfilter_factor * a, 0.606, 1.0);
                     adjust[h].process(t);
                     type lo = adjust[h].pass();
                     t = lo;
-                    type ga = (max_gain - gain) * std::log(1.0 + a);
-                    t = ((3.0+ga)/(2.0+ga))*t - (t*t*t)/(2.0+ga);
+                    type level = (max_gain - gain) * std::log2(1.0 + a);
+                    t = curves::combine<type>(curves::f1<type>, curves::f2<type>)(t, level);
                     t = (1. - eps) * lo + eps * t;
                     t = t * compensation;
                     highpass[h+1].process(t);

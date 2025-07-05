@@ -1,6 +1,8 @@
 # mnamp
 (LV2) Amplifier plugin based on gathered principles and rules of thumb more than any kind of direct emulation of anything
 
+Now works by simple multi-stage low-order polynomial waveshaping, where the input is limited to -1..1 (so that the polynomial functions behave).
+
 Compilation:
 Just run make.
 
@@ -24,4 +26,4 @@ There is currently only available the generic GUI controls possibly provided by 
 Control parameters (this section needs a bit of updating)
 -----------------------------------------------------------
 
-There is a gain control and some other controls.
+There is a gain ("Drive") control and some other controls.

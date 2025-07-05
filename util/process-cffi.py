@@ -48,7 +48,6 @@ ports = {
         'in':ffi.new('float [{}]'.format(buffer_length)),
         'cutoff':ffi.new('float *'),
         'stages':ffi.new('float *'),
-        'bias':ffi.new('float *'),
         'resonance':ffi.new('float *'),
         'eps':ffi.new('float *'),
         'eq':ffi.new('float *'),
@@ -61,18 +60,16 @@ descriptor.connect_port(amp, 0, ports['out'])
 descriptor.connect_port(amp, 1, ports['in'])
 descriptor.connect_port(amp, 2, ports['cutoff'])
 descriptor.connect_port(amp, 3, ports['stages'])
-descriptor.connect_port(amp, 4, ports['bias'])
-descriptor.connect_port(amp, 5, ports['resonance'])
-descriptor.connect_port(amp, 6, ports['eps'])
-descriptor.connect_port(amp, 7, ports['eq'])
-descriptor.connect_port(amp, 8, ports['compensation'])
-descriptor.connect_port(amp, 9, ports['volume'])
-descriptor.connect_port(amp, 10, ports['gain'])
+descriptor.connect_port(amp, 4, ports['resonance'])
+descriptor.connect_port(amp, 5, ports['eps'])
+descriptor.connect_port(amp, 6, ports['eq'])
+descriptor.connect_port(amp, 7, ports['compensation'])
+descriptor.connect_port(amp, 8, ports['volume'])
+descriptor.connect_port(amp, 9, ports['gain'])
 descriptor.activate(amp)
-ports['gain'][0] = ffi.cast('float', 23.59)
+ports['gain'][0] = ffi.cast('float', 23.959)
 ports['cutoff'][0] = ffi.cast('float', 1994.0)
 ports['stages'][0] = ffi.cast('float', ffi.cast('unsigned int', 16))
-ports['bias'][0] = ffi.cast('float', 0.0)
 ports['resonance'][0] = ffi.cast('float', 1.707)
 ports['eps'][0] = ffi.cast('float', 0.707)
 ports['eq'][0] = ffi.cast('float', 0.509)
