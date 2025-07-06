@@ -57,7 +57,7 @@ namespace mnamp {
                 gain_ = std::fmin<type>(gain.pass(), 1.0 / std::abs(x));
             }
             type y = gain_ * x;
-            lowpass.process(x);
+            lowpass.process(std::abs(x));
             if (std::abs(lowpass.pass()) <= 0.0) {
                 gain.process(1.0);
             }
@@ -153,6 +153,7 @@ namespace mnamp {
         type const max_gain = 24.0;
         type const downfilter_factor = 4.0;
         Limit<type> limiters[constants::max_stages];
+        Limit<type> main_limiter;
 
     public:
         explicit mnamp(type rate) : sr(rate) {
@@ -172,9 +173,11 @@ namespace mnamp {
             lowpass_filter_parameters.setparams(19000.0, 0.707, sr);
             for (uint32_t h = 0; h < constants::max_stages; h++) {
                 adjust[h].setparams(0.5*sr/8, 0.606, 1.0);
-                limiters[h].set_lowpass_params(10.0, 1.0, sr);
-                limiters[h].set_gain_params(10.0, 1.0, sr);
+                limiters[h].set_lowpass_params(1.0, 1.0, sr);
+                limiters[h].set_gain_params(1.0, 1.0, sr);
             }
+            main_limiter.set_lowpass_params(1.0, 1.0, sr);
+            main_limiter.set_gain_params(1.0, 1.0, sr);
         }
         void inline run(const uint32_t n) {
             for (uint32_t i = 0; i < constants::ports; ++i)
@@ -200,6 +203,7 @@ namespace mnamp {
             // Processing loop.
             for (uint32_t i = 0; i < n; ++i) {
                 type t = x[i];
+                t = main_limiter.process(t);
 
                 highpass[0].process(t);
                 t = highpass[0].pass();
@@ -214,6 +218,7 @@ namespace mnamp {
 
                 for (uint32_t h = 0; h < stages; ++h) {
                     t = limiters[h].process(t);
+                    type s = t;
                     type a = std::abs(t);
                     a = a/(1.0 + a);
                     a = 1.0 - a;
@@ -222,8 +227,9 @@ namespace mnamp {
                     type lo = adjust[h].pass();
                     t = lo;
                     type level = (max_gain - gain) * std::log2(1.0 + a);
-                    t = curves::combine<type>(curves::f1<type>, curves::f2<type>)(t, level);
+                    t = curves::combine<type>(curves::f2<type>, curves::f1<type>)(t, level);
                     t = (1. - eps) * lo + eps * t;
+                    t = a * t + (1.0 - a) * s;
                     t = t * compensation;
                     highpass[h+1].process(t);
                     t = highpass[h+1].pass();
