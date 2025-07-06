@@ -15,15 +15,15 @@ namespace mnamp {
             return (3.+level)*x/(2.+level)-x*x*x/(2.+level);
         }
         template<typename type>
-        auto combine(std::function<type(type, type)> below,
-                     std::function<type(type, type)> above) {
-            return [below, above](type x, type level=0.0) {
-                type t = 0.5*(1.0 + x); return (1.0-t)*below(x, level)+t*above(x, level);
+        std::function<type(type, type)> combine(std::function<type(type, type)> const & below,
+                     std::function<type(type, type)> const & above, type & threshold) {
+            return [below, above, &threshold](type x, type level=0.0) {
+                type t = 0.5*(1.0 + x) * threshold; return (1.0-t)*below(x, level)+t*above(x, level);
             };
         }
         template <typename type>
-        auto invert(type (*f)(type, type)) {
-            return [&f](type x, type level=0.0) {
+        std::function<type(type, type)> invert(std::function<type(type, type)> const & f) {
+            return [f](type x, type level=0.0) {
                 x = -x;
                 type y = f(x, level);
                 y = -y;
@@ -151,9 +151,13 @@ namespace mnamp {
 
         LowpassCascade adjust[constants::max_stages];
         type const max_gain = 24.0;
-        type const downfilter_factor = 4.0;
+        type const downfilter_factor = 6.0;
         Limit<type> limiters[constants::max_stages];
         Limit<type> main_limiter;
+        type threshold = 0.625;
+        std::function<type(type, type)> curve0 = curves::combine<type>(curves::f0<type>, curves::f1<type>, threshold);
+        std::function<type(type, type)> curve1 = curves::combine<type>(curves::f2<type>, curves::f1<type>, threshold);
+        std::function<type(type, type)> curve = curves::combine<type>(curve0, curve1, threshold);
 
     public:
         explicit mnamp(type rate) : sr(rate) {
@@ -227,7 +231,7 @@ namespace mnamp {
                     type lo = adjust[h].pass();
                     t = lo;
                     type level = (max_gain - gain) * std::log2(1.0 + a);
-                    t = curves::combine<type>(curves::f2<type>, curves::f1<type>)(t, level);
+                    t = curve(t, level);
                     t = (1. - eps) * lo + eps * t;
                     t = a * t + (1.0 - a) * s;
                     t = t * compensation;
