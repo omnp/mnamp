@@ -223,7 +223,6 @@ namespace mnamp {
 
                 for (uint32_t h = 0; h < stages; ++h) {
                     t = limiters[h].process(t);
-                    type s = t;
                     type a = std::abs(t);
                     a = a/(1.0 + a);
                     a = 1.0 - a * 1e-2;
@@ -234,7 +233,6 @@ namespace mnamp {
                     type level = (max_gain - gain) * std::log2(1.0 + a);
                     t = curve(t, level);
                     t = (1. - eps) * lo + eps * t;
-                    t = a * t + (1.0 - a) * s;
                     t = t * compensation;
                     highpass[h+1].process(t);
                     t = highpass[h+1].pass();
