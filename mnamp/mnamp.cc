@@ -16,7 +16,7 @@ namespace mnamp {
         }
         template<typename type>
         std::function<type(type, type)> combine(std::function<type(type, type)> const & below,
-                     std::function<type(type, type)> const & above, type & threshold) {
+                     std::function<type(type, type)> const & above, type const & threshold) {
             return [below, above, &threshold](type x, type level=0.0) {
                 type t = 0.5*(1.0 + x) * threshold; return (1.0-t)*below(x, level)+t*above(x, level);
             };
@@ -154,9 +154,10 @@ namespace mnamp {
         type const downfilter_factor = 6.0;
         Limit<type> limiters[constants::max_stages];
         Limit<type> main_limiter;
+        type const basic_threshold = 1.0;
         type threshold = 0.625;
-        std::function<type(type, type)> curve0 = curves::combine<type>(curves::f0<type>, curves::f1<type>, threshold);
-        std::function<type(type, type)> curve1 = curves::combine<type>(curves::f2<type>, curves::f1<type>, threshold);
+        std::function<type(type, type)> curve0 = curves::combine<type>(curves::f0<type>, curves::f1<type>, basic_threshold);
+        std::function<type(type, type)> curve1 = curves::combine<type>(curves::f2<type>, curves::f1<type>, basic_threshold);
         std::function<type(type, type)> curve = curves::combine<type>(curve0, curve1, threshold);
 
     public:
