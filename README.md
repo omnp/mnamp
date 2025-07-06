@@ -27,3 +27,5 @@ Control parameters (this section needs a bit of updating)
 -----------------------------------------------------------
 
 There is a gain ("Drive") control and some other controls.
+
+View the docs (what there is) <a href="https://omnp.github.io/mnamp">online</a>
