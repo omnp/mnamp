@@ -227,7 +227,7 @@ namespace mnamp {
                     type a = std::abs(t);
                     a = a/(1.0 + a);
                     a = 1.0 - a;
-                    adjust[h].setparams(0.5 * sr/downfilter_factor * a, 0.606, 1.0);
+                    adjust[h].setparams(0.5 * sr/downfilter_factor, 0.606, sr);
                     adjust[h].process(t);
                     type lo = adjust[h].pass();
                     t = lo;
