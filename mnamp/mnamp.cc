@@ -139,9 +139,9 @@ namespace mnamp {
         port_parameter<constants::names::gain> gain{this};
 
         using Lowpass = OnePoleZD<type>;
-        using LowpassCascade = filter_cascade<type, Lowpass, 6u>;
+        using LowpassCascade = filter_cascade<type, Lowpass, 3u>;
         using Highpass = OnePoleHigh<OnePoleZD<type>>;
-        using HighpassCascade = filter_cascade<type, Highpass, 6u>;
+        using HighpassCascade = filter_cascade<type, Highpass, 1u>;
 
         LowpassCascade lowpass;
         LowpassCascade splitter;
@@ -174,15 +174,15 @@ namespace mnamp {
                 ports[port] = (io_type *) data;
         }
         void activate() {
-            highpass_filter_parameters.setparams(15.0, 0.404, sr);
+            highpass_filter_parameters.setparams(0.0, 0.404, sr);
             lowpass_filter_parameters.setparams(19000.0, 0.707, sr);
             for (uint32_t h = 0; h < constants::max_stages; h++) {
-                adjust[h].setparams(0.5*sr/8, 0.606, 1.0);
-                limiters[h].set_lowpass_params(1.0, 1.0, sr);
-                limiters[h].set_gain_params(1.0, 1.0, sr);
+                adjust[h].setparams(0.5*sr/downfilter_factor, 0.606, 1.0);
+                limiters[h].set_lowpass_params(0.1, 1.0, sr);
+                limiters[h].set_gain_params(0.1, 1.0, sr);
             }
-            main_limiter.set_lowpass_params(1.0, 1.0, sr);
-            main_limiter.set_gain_params(1.0, 1.0, sr);
+            main_limiter.set_lowpass_params(0.1, 1.0, sr);
+            main_limiter.set_gain_params(0.1, 1.0, sr);
         }
         void inline run(const uint32_t n) {
             for (uint32_t i = 0; i < constants::ports; ++i)
@@ -225,7 +225,7 @@ namespace mnamp {
                     t = limiters[h].process(t);
                     type a = std::abs(t);
                     a = a/(1.0 + a);
-                    a = 1.0 - a * 1e-2;
+                    a = 1.0 - a * .25;
                     adjust[h].setparams(0.5 * sr/downfilter_factor * a, 0.606, sr);
                     adjust[h].process(t);
                     type lo = adjust[h].pass();
