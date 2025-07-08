@@ -73,7 +73,7 @@ ports['stages'][0] = ffi.cast('float', ffi.cast('unsigned int', 16))
 ports['resonance'][0] = ffi.cast('float', 1.707)
 ports['eps'][0] = ffi.cast('float', 0.707)
 ports['eq'][0] = ffi.cast('float', 0.509)
-ports['compensation'][0] = ffi.cast('float', 0.0)
+ports['compensation'][0] = ffi.cast('float', -0.5)
 ports['volume'][0] = ffi.cast('float', -0.0)
 for i in range(0,len(sine)-1,buffer_length):
     for j in range(0, buffer_length):
