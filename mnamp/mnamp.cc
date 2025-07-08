@@ -139,9 +139,9 @@ namespace mnamp {
         port_parameter<constants::names::gain> gain{this};
 
         using Lowpass = OnePoleZD<type>;
-        using LowpassCascade = filter_cascade<type, Lowpass, 3u>;
+        using LowpassCascade = filter_cascade<type, Lowpass, 4u>;
         using Highpass = OnePoleHigh<OnePoleZD<type>>;
-        using HighpassCascade = filter_cascade<type, Highpass, 1u>;
+        using HighpassCascade = filter_cascade<type, Highpass, 4u>;
 
         LowpassCascade lowpass;
         LowpassCascade splitter;
@@ -174,7 +174,7 @@ namespace mnamp {
                 ports[port] = (io_type *) data;
         }
         void activate() {
-            highpass_filter_parameters.setparams(0.0, 0.404, sr);
+            highpass_filter_parameters.setparams(1.0, 0.404, sr);
             lowpass_filter_parameters.setparams(19000.0, 0.707, sr);
             for (uint32_t h = 0; h < constants::max_stages; h++) {
                 adjust[h].setparams(0.5*sr/downfilter_factor, 0.606, 1.0);
@@ -202,8 +202,6 @@ namespace mnamp {
 
             // Preprocessing
             splitter.setparams(cutoff, resonance * 1000.0 / (1.0 + cutoff), sr);
-            highpass_filter_parameters.setparams(15.0/sr, 0.404, 1.0);
-            lowpass_filter_parameters.setparams(19000.0/sr, 0.707, 1.0);
 
             // Processing loop.
             for (uint32_t i = 0; i < n; ++i) {
@@ -225,7 +223,7 @@ namespace mnamp {
                     t = limiters[h].process(t);
                     type a = std::abs(t);
                     a = a/(1.0 + a);
-                    a = 1.0 - a * .25;
+                    a = 1.0 - a * .50;
                     adjust[h].setparams(0.5 * sr/downfilter_factor * a, 0.606, sr);
                     adjust[h].process(t);
                     type lo = adjust[h].pass();
