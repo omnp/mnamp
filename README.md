@@ -23,9 +23,46 @@ This is provided as is, and available here mostly for my own archiving purposes,
 There is currently only available the generic GUI controls possibly provided by the host application used. As far as hosts are considered I recommend a DAW which can plot an analysis of the plugin response, like Ardour does for example, to dial in the parameters more easily.
 
 
-Control parameters (this section needs a bit of updating)
+Control parameters (Updated!)
 -----------------------------------------------------------
 
 There is a gain ("Drive") control and some other controls.
 
-View the docs (what there is) <a href="https://omnp.github.io/mnamp">online</a>
+Details
+
+![](docs/mnamp-controls-cropped.png)
+Screenshot of the controls as shown in the Ardour DAW.
+
+  * Drive.
+    * Controls the amount of curvature (within the limits of a 2nd or 3rd order polynomial).
+    * More drive produces more distortion.
+    * It is not quite a linear adjustment.
+  * Stages
+    * Controls the number of polynomial processing stages inside this plugin instance.
+    * More stages = more distortion.
+    * One can of course use more than one instance in a DAW with other effects in between for example.
+    * Integer from 1 to 32.
+  * Cutoff.
+    * Controls the filters for the EQ section.
+    * Linear control from 0.0 Hz to 3000.0 Hz.
+    * Frequency bands:
+      * Low = lowpass @ cutoff
+      * High = highpass @ 6000.0 Hz - cutoff
+      * Mid = What is left after subtraction.
+  * Resonance.
+    * Multiplying factor for the level of "middle" frequencies to mix in.
+    * Applied at the beginning only. Not at each stage.
+    * Linear control from 0.0 to 5.0.
+  * Blend.
+    * Amount polynomially processed signal to mix in at each stage.
+    * Linear control from 0.0 to 1.0.
+  * Mix Bass/Treble.
+    * Applied at the beginning only. Not at each stage.
+    * Linear control from 0.0 to 1.0.
+  * Gain compensation.
+    * Adjustment applied to the level after each separate stage.
+    * Range: -9.0 dB to +3.0 dB.
+  * Volume is a final output level adjustment.
+    * Range: -24.0 dB to +12.0 dB.
+
+View the additional docs (what there is) <a href="https://omnp.github.io/mnamp">online</a>
