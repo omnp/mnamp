@@ -16,9 +16,9 @@ namespace mnamp {
         }
         template<typename type>
         std::function<type(type, type)> combine(std::function<type(type, type)> const & below,
-                     std::function<type(type, type)> const & above, type & threshold) {
+                     std::function<type(type, type)> const & above, std::function<type(void)> const & threshold) {
             return [below, above, &threshold](type x, type level=0.0) {
-                type t = 0.5*(1.0 + x) * threshold; return (1.0-t)*below(x, level)+t*above(x, level);
+                type t = 0.5*(1.0 + x) * threshold(); return (1.0-t)*below(x, level)+t*above(x, level);
             };
         }
         template <typename type>
@@ -92,8 +92,10 @@ namespace mnamp {
                 static const uint32_t compensation = 7u;
                 static const uint32_t volume = 8u;
                 static const uint32_t gain = 9u;
+                static const uint32_t curve = 10u;
+                static const uint32_t threshold = 11u;
             };
-            static const uint32_t ports = 10u;
+            static const uint32_t ports = 12u;
             enum struct conversion {none = 0u, linear = 1u, db = 2u};
         };
         io_type * ports[constants::ports];
@@ -137,6 +139,8 @@ namespace mnamp {
         port_parameter<constants::names::compensation, type, constants::conversion::db> compensation{this};
         port_parameter<constants::names::volume, type, constants::conversion::db> volume{this};
         port_parameter<constants::names::gain> gain{this};
+        port_parameter<constants::names::curve, uint32_t, constants::conversion::none> curve_index{this};
+        port_parameter<constants::names::threshold> threshold{this};
 
         using Lowpass = OnePoleZD<type>;
         using LowpassCascade = filter_cascade<type, Lowpass, 4u>;
@@ -155,11 +159,21 @@ namespace mnamp {
         type const downfilter_factor = 6.0;
         Limit<type> limiters[constants::max_stages];
         Limit<type> main_limiter;
-        type basic_threshold = 1.0;
-        type threshold = 0.625;
+        std::function<type(void)> basic_threshold = []{return 1.0;};
+        std::function<type(void)> active_threshold = [this]{return this->threshold();};
         std::function<type(type, type)> curve0 = curves::combine<type>(curves::f0<type>, curves::f1<type>, basic_threshold);
         std::function<type(type, type)> curve1 = curves::combine<type>(curves::f2<type>, curves::f1<type>, basic_threshold);
-        std::function<type(type, type)> curve = curves::combine<type>(curve0, curve1, threshold);
+        std::function<type(type, type)> curve = curves::combine<type>(curve0, curve1, active_threshold);
+        std::vector<std::function<type(type, type)>> selectable_curves
+            {
+                curve0,
+                curve1,
+                curve,
+                curves::combine<type>(
+                    curves::combine<type>(curves::f0<type>, curves::f2<type>, basic_threshold),
+                    curves::combine<type>(curves::f1<type>, curves::f1<type>, basic_threshold),
+                    active_threshold),
+            };
 
     public:
         explicit mnamp(type rate) : sr(rate) {
@@ -200,6 +214,7 @@ namespace mnamp {
             const type compensation = this->compensation();
             const type volume = this->volume();
             const type gain = this->gain();
+            uint32_t const selected_curve_index = this->curve_index();
 
             // Preprocessing
             splitter.setparams(cutoff / sr, 1.0  * 1000.0 / (1.0 + cutoff), 1.0);
@@ -234,7 +249,7 @@ namespace mnamp {
                     type lo = adjust[h].pass();
                     t = lo;
                     type level = (max_gain - gain) * std::log2(1.0 + a);
-                    t = curve(t, level);
+                    t = selectable_curves[selected_curve_index](t, level);
                     t = (1. - eps) * lo + eps * t;
                     t = t * compensation;
                     highpass[h+1].process(t);

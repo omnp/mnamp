@@ -96,4 +96,27 @@
             lv2:default 0.0 ;
             lv2:minimum 0.0 ;
             lv2:maximum 24.0 ;
+        ],
+        [
+            a lv2:InputPort , lv2:ControlPort ;
+            lv2:index 10 ;
+            lv2:symbol "curve" ;
+            lv2:name "Curve" ;
+            lv2:default 2 ;
+            lv2:minimum 0 ;
+            lv2:maximum 3 ;
+            lv2:portProperty lv2:integer, lv2:enumeration ;
+                lv2:scalePoint [rdfs:label "linear + 2nd order (no threshold)"; rdf:value 0];
+                lv2:scalePoint [rdfs:label "linear + 3rd order (no threshold)"; rdf:value 1];
+                lv2:scalePoint [rdfs:label "linear+2nd + 3rd+2nd"; rdf:value 2];
+                lv2:scalePoint [rdfs:label "linear+3rd + 2nd+2nd"; rdf:value 3];
+        ] ,
+        [
+            a lv2:InputPort , lv2:ControlPort ;
+            lv2:index 11 ;
+            lv2:symbol "threshold" ;
+            lv2:name "Threshold (Curves)" ;
+            lv2:default 0.625 ;
+            lv2:minimum 0.0 ;
+            lv2:maximum 1.0 ;
         ] .
