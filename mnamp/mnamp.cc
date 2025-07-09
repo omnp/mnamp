@@ -203,7 +203,7 @@ namespace mnamp {
 
             // Preprocessing
             splitter.setparams(cutoff / sr, 1.0  * 1000.0 / (1.0 + cutoff), 1.0);
-            splitter_high.setparams(0.5 - cutoff / sr, 1.0 * 1000.0 / (1.0 + cutoff), 1.0);
+            splitter_high.setparams((6000.0 - cutoff) / sr, 1.0 * 1000.0 / (1.0 + cutoff), 1.0);
 
             // Processing loop.
             for (uint32_t i = 0; i < n; ++i) {
