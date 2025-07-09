@@ -32,7 +32,7 @@ Details
 
 ![](docs/mnamp-controls-cropped.png)
 
-Screenshot of the controls as shown in the Ardour DAW (does not show the Curve and Threshold parameters yet!).
+Screenshot of the controls as shown in the Ardour DAW.
 
 
   * Drive.
