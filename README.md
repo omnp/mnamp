@@ -31,7 +31,9 @@ There is a gain ("Drive") control and some other controls.
 Details
 
 ![](docs/mnamp-controls-cropped.png)
-Screenshot of the controls as shown in the Ardour DAW.
+
+Screenshot of the controls as shown in the Ardour DAW (does not show the Curve and Threshold parameters yet!).
+
 
   * Drive.
     * Controls the amount of curvature (within the limits of a 2nd or 3rd order polynomial).
@@ -64,5 +66,12 @@ Screenshot of the controls as shown in the Ardour DAW.
     * Range: -9.0 dB to +3.0 dB.
   * Volume is a final output level adjustment.
     * Range: -24.0 dB to +12.0 dB.
+  * Curve.
+    * Index into a selection of some (four) preconfigured blends of polynomial curves.   
+    More can be added!
+  * Threshold.
+    * A factor for the above blending process (dynamic so it reacts to changes during processing).
+    * Does not apply to all blends though.   
+    This is noted in the label in the generic UI.
 
 View the additional docs (what there is) <a href="https://omnp.github.io/mnamp">online</a>
