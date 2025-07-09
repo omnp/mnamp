@@ -145,6 +145,7 @@ namespace mnamp {
 
         LowpassCascade lowpass;
         LowpassCascade splitter;
+        HighpassCascade splitter_high;
         HighpassCascade highpass[1u+constants::max_stages];
         filter_parameters<type, LowpassCascade> lowpass_filter_parameters;
         filter_parameters<type, HighpassCascade> highpass_filter_parameters;
@@ -201,7 +202,8 @@ namespace mnamp {
             const type gain = this->gain();
 
             // Preprocessing
-            splitter.setparams(cutoff, resonance * 1000.0 / (1.0 + cutoff), sr);
+            splitter.setparams(cutoff / sr, 1.0  * 1000.0 / (1.0 + cutoff), 1.0);
+            splitter_high.setparams(0.5 - cutoff / sr, 1.0 * 1000.0 / (1.0 + cutoff), 1.0);
 
             // Processing loop.
             for (uint32_t i = 0; i < n; ++i) {
@@ -216,7 +218,10 @@ namespace mnamp {
                 splitter.process(t);
                 type bass = splitter.pass();
                 type high = t - bass;
-                bass = (1. - mix) * bass + mix * high;
+                splitter_high.process(t);
+                type mid = high - splitter_high.pass();
+                high = splitter_high.pass();
+                bass = (1. - mix) * bass + resonance * mid + mix * high;
                 t = bass;
 
                 for (uint32_t h = 0; h < stages; ++h) {
