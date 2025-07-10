@@ -231,13 +231,11 @@ namespace mnamp {
                 t = lowpass.pass();
 
                 splitter.process(t);
-                type bass = splitter.pass();
-                type high = t - bass;
                 splitter_high.process(t);
-                type mid = high - splitter_high.pass();
-                high = splitter_high.pass();
-                bass = (1. - mix) * bass + resonance * mid + mix * high;
-                t = bass;
+                type bass = splitter.pass();
+                type high = splitter_high.pass();
+                type mid = t - bass - high;
+                t = (1. - mix) * bass + resonance * mid + mix * high;
 
                 for (uint32_t h = 0; h < stages; ++h) {
                     t = limiters[h].process(t);
