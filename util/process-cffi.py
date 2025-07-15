@@ -54,6 +54,8 @@ ports = {
         'compensation':ffi.new('float *'),
         'volume':ffi.new('float *'),
         'gain':ffi.new('float *'),
+        'curve':ffi.new('float *'),
+        'threshold':ffi.new('float *'),
         }
 print(ports)
 descriptor.connect_port(amp, 0, ports['out'])
@@ -66,6 +68,8 @@ descriptor.connect_port(amp, 6, ports['eq'])
 descriptor.connect_port(amp, 7, ports['compensation'])
 descriptor.connect_port(amp, 8, ports['volume'])
 descriptor.connect_port(amp, 9, ports['gain'])
+descriptor.connect_port(amp, 10, ports['curve'])
+descriptor.connect_port(amp, 11, ports['threshold'])
 descriptor.activate(amp)
 ports['gain'][0] = ffi.cast('float', 23.959)
 ports['cutoff'][0] = ffi.cast('float', 1994.0)
@@ -75,6 +79,8 @@ ports['eps'][0] = ffi.cast('float', 0.707)
 ports['eq'][0] = ffi.cast('float', 0.509)
 ports['compensation'][0] = ffi.cast('float', -0.5)
 ports['volume'][0] = ffi.cast('float', -0.0)
+ports['curve'][0] = ffi.cast('float', ffi.cast('unsigned int', 2))
+ports['threshold'][0] = ffi.cast('float', 0.625)
 for i in range(0,len(sine)-1,buffer_length):
     for j in range(0, buffer_length):
         ports['in'][j] = sine[i+j]
