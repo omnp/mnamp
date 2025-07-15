@@ -157,7 +157,6 @@ namespace mnamp {
         LowpassCascade adjust[constants::max_stages];
         type const max_gain = 24.0;
         type const downfilter_factor = 6.0;
-        Limit<type> limiters[constants::max_stages];
         Limit<type> main_limiter;
         std::function<type(void)> basic_threshold = []{return 1.0;};
         std::function<type(void)> active_threshold = [this]{return this->threshold();};
@@ -193,8 +192,6 @@ namespace mnamp {
             lowpass_filter_parameters.setparams(19000.0, 0.707, sr);
             for (uint32_t h = 0; h < constants::max_stages; h++) {
                 adjust[h].setparams(0.5*sr/downfilter_factor, 0.606, sr);
-                limiters[h].set_lowpass_params(0.1, 1.0, sr);
-                limiters[h].set_gain_params(0.1, 1.0, sr);
             }
             main_limiter.set_lowpass_params(0.1, 1.0, sr);
             main_limiter.set_gain_params(0.1, 1.0, sr);
@@ -223,7 +220,6 @@ namespace mnamp {
             // Processing loop.
             for (uint32_t i = 0; i < n; ++i) {
                 type t = x[i];
-                t = main_limiter.process(t);
 
                 highpass[0].process(t);
                 t = highpass[0].pass();
@@ -236,17 +232,17 @@ namespace mnamp {
                 type high = splitter_high.pass();
                 type mid = t - bass - high;
                 t = (1. - mix) * bass + resonance * mid + mix * high;
+                t = main_limiter.process(t);
 
                 for (uint32_t h = 0; h < stages; ++h) {
-                    t = limiters[h].process(t);
                     type a = std::abs(t);
                     a = a/(1.0 + a);
-                    a = 1.0 - a * .50;
+                    a = std::log2(2.0 - a);
+                    type level = (max_gain - gain) * a;
                     adjust[h].setparams(0.5 * sr/downfilter_factor * a, 0.606, sr);
                     adjust[h].process(t);
                     type lo = adjust[h].pass();
                     t = lo;
-                    type level = (max_gain - gain) * std::log2(1.0 + a);
                     t = selectable_curves[selected_curve_index](t, level);
                     t = (1. - eps) * lo + eps * t;
                     t = t * compensation;
