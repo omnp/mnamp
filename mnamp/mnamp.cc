@@ -1,4 +1,5 @@
 #include <functional>
+#include <initializer_list>
 #include <lv2/core/lv2.h>
 #include "../common/onepole.h"
 
@@ -158,12 +159,12 @@ namespace mnamp {
         type const max_gain = 24.0;
         type const downfilter_factor = 6.0;
         Limit<type> main_limiter;
-        std::function<type(void)> basic_threshold = []{return 1.0;};
-        std::function<type(void)> active_threshold = [this]{return this->threshold();};
-        std::function<type(type, type)> curve0 = curves::combine<type>(curves::f0<type>, curves::f1<type>, basic_threshold);
-        std::function<type(type, type)> curve1 = curves::combine<type>(curves::f2<type>, curves::f1<type>, basic_threshold);
-        std::function<type(type, type)> curve = curves::combine<type>(curve0, curve1, active_threshold);
-        std::vector<std::function<type(type, type)>> selectable_curves
+        std::function<type(void)> const basic_threshold = []{return 1.0;};
+        std::function<type(void)> const active_threshold = [this]{return this->threshold();};
+        std::function<type(type, type)> const curve0 = curves::combine<type>(curves::f0<type>, curves::f1<type>, basic_threshold);
+        std::function<type(type, type)> const curve1 = curves::combine<type>(curves::f2<type>, curves::f1<type>, basic_threshold);
+        std::function<type(type, type)> const curve = curves::combine<type>(curve0, curve1, active_threshold);
+        std::array<std::function<type(type, type)> const, 4u> selectable_curves
             {
                 curve0,
                 curve1,
