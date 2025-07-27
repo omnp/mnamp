@@ -51,8 +51,8 @@ public:
         return t;
     }
     void process(type const x) {
-        low.process(x);
         t = x - low.pass();
+        low.process(x);
     }
     void setparams(type k, type q, type sr) {
         low.setparams(k, q, sr);
