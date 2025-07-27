@@ -1,5 +1,4 @@
 #include <functional>
-#include <initializer_list>
 #include <lv2/core/lv2.h>
 #include "../common/onepole.h"
 
@@ -45,8 +44,8 @@ namespace mnamp {
     class Limit
     {
     private:
-        OnePoleZD<type> lowpass;
-        OnePoleZD<type> gain;
+        OnePole<type> lowpass;
+        OnePole<type> gain;
     public:
         Limit() {
             lowpass.setparams(0.5, 1.0, 1.0);
@@ -112,7 +111,7 @@ namespace mnamp {
             }
             mnamp const * m;
             uint32_t const index = name;
-            OnePoleZD<type> input_filter;
+            OnePole<type> input_filter;
             return_type operator()() {
                 type in = *m->port(name);
                 switch (c) {
@@ -143,10 +142,10 @@ namespace mnamp {
         port_parameter<constants::names::curve, uint32_t, constants::conversion::none> curve_index{this};
         port_parameter<constants::names::threshold> threshold{this};
 
-        using Lowpass = OnePoleZD<type>;
-        using LowpassCascade = filter_cascade<type, Lowpass, 4u>;
-        using Highpass = OnePoleHigh<OnePoleZD<type>>;
-        using HighpassCascade = filter_cascade<type, Highpass, 4u>;
+        using Lowpass = OnePole<type>;
+        using LowpassCascade = filter_cascade<type, Lowpass, 2u>;
+        using Highpass = OnePoleHigh<OnePole<type>>;
+        using HighpassCascade = filter_cascade<type, Highpass, 2u>;
 
         LowpassCascade lowpass;
         LowpassCascade splitter;
