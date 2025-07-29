@@ -235,6 +235,7 @@ namespace mnamp {
                 type high = splitter_high.pass();
                 type mid = t - bass - high;
                 t = (1. - mix) * bass + resonance * mid + mix * high;
+                t = t / (1. + (resonance > 1.0 ? resonance - 1.0 : 0.0));
                 t = main_limiter.process(t);
 
                 for (uint32_t h = 0; h < stages; ++h) {
