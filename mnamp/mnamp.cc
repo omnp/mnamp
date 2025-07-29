@@ -148,8 +148,8 @@ namespace mnamp {
         using HighpassCascade = filter_cascade<type, Highpass, 2u>;
 
         LowpassCascade lowpass;
-        LowpassCascade splitter;
-        HighpassCascade splitter_high;
+        filter_cascade<type, Lowpass, 1u> splitter;
+        filter_cascade<type, Highpass, 1u> splitter_high;
         HighpassCascade highpass[1u+constants::max_stages];
         filter_parameters<type, LowpassCascade> lowpass_filter_parameters;
         filter_parameters<type, HighpassCascade> highpass_filter_parameters;
@@ -158,6 +158,7 @@ namespace mnamp {
         type const max_gain = 24.0;
         type const downfilter_factor = 6.0;
         Limit<type> main_limiter;
+        std::array<Limit<type>, constants::max_stages> limiters;
         std::function<type(void)> const basic_threshold = []{return 1.0;};
         std::function<type(void)> const active_threshold = [this]{return this->threshold();};
         std::function<type(type, type)> const curve0 = curves::combine<type>(curves::f0<type>, curves::f1<type>, basic_threshold);
@@ -188,10 +189,12 @@ namespace mnamp {
                 ports[port] = (io_type *) data;
         }
         void activate() {
-            highpass_filter_parameters.setparams(1.0, 0.404, sr);
-            lowpass_filter_parameters.setparams(19000.0, 0.707, sr);
+            highpass_filter_parameters.setparams(37.5, 0.404, sr);
+            lowpass_filter_parameters.setparams(22000.0, 0.707, sr);
             for (uint32_t h = 0; h < constants::max_stages; h++) {
                 adjust[h].setparams(0.5*sr/downfilter_factor, 0.606, sr);
+                limiters[h].set_lowpass_params(0.1, 1.0, sr);
+                limiters[h].set_gain_params(0.1, 1.0, sr);
             }
             main_limiter.set_lowpass_params(0.1, 1.0, sr);
             main_limiter.set_gain_params(0.1, 1.0, sr);
@@ -235,6 +238,7 @@ namespace mnamp {
                 t = main_limiter.process(t);
 
                 for (uint32_t h = 0; h < stages; ++h) {
+                    t = limiters[h].process(t);
                     type a = std::abs(t);
                     a = a/(1.0 + a);
                     a = std::log2(2.0 - a);
