@@ -3,6 +3,8 @@
 
 Now works by simple multi-stage low-order polynomial waveshaping, where the input is limited to -1..1 (so that the polynomial functions behave).
 
+NOTE: This *is* just a waveshaper and should be combined with a cabinet simulator / IR loader and impulse response.
+
 Compilation:
 Just run make.
 
