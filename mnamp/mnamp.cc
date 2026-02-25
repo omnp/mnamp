@@ -154,7 +154,7 @@ namespace mnamp {
         filter_parameters<type, LowpassCascade> lowpass_filter_parameters;
         filter_parameters<type, HighpassCascade> highpass_filter_parameters;
 
-        filter_cascade<type, Lowpass, 48u> adjust[constants::max_stages];
+        filter_cascade<type, Lowpass, 2u> adjust[constants::max_stages];
         type const max_gain = 24.0;
         type const downfilter_factor = 6.0;
         Limit<type> main_limiter;
