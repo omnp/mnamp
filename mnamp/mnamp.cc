@@ -164,7 +164,7 @@ namespace mnamp {
         std::function<type(type, type)> const curve0 = curves::combine<type>(curves::f0<type>, curves::f1<type>, basic_threshold);
         std::function<type(type, type)> const curve1 = curves::combine<type>(curves::f2<type>, curves::f1<type>, basic_threshold);
         std::function<type(type, type)> const curve = curves::combine<type>(curve0, curve1, active_threshold);
-        std::array<std::function<type(type, type)> const, 4u> selectable_curves
+        std::array<std::function<type(type, type)> const, 6u> selectable_curves
             {
                 curve0,
                 curve1,
@@ -172,6 +172,14 @@ namespace mnamp {
                 curves::combine<type>(
                     curves::combine<type>(curves::f0<type>, curves::f2<type>, basic_threshold),
                     curves::combine<type>(curves::f1<type>, curves::f1<type>, basic_threshold),
+                    active_threshold),
+                curves::combine<type>(
+                    curves::combine<type>(curves::f2<type>, curves::f0<type>, basic_threshold),
+                    curves::combine<type>(curves::f0<type>, curves::f1<type>, basic_threshold),
+                    active_threshold),
+                curves::combine<type>(
+                    curves::combine<type>(curves::f2<type>, curves::f1<type>, basic_threshold),
+                    curves::combine<type>(curves::f0<type>, curves::f1<type>, basic_threshold),
                     active_threshold),
             };
 
