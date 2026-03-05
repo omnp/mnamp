@@ -110,6 +110,8 @@
                 lv2:scalePoint [rdfs:label "linear + 3rd order (no threshold)"; rdf:value 1];
                 lv2:scalePoint [rdfs:label "linear+2nd + 3rd+2nd"; rdf:value 2];
                 lv2:scalePoint [rdfs:label "linear+3rd + 2nd+2nd"; rdf:value 3];
+                lv2:scalePoint [rdfs:label "3rd+linear + linear+2nd"; rdf:value 4];
+                lv2:scalePoint [rdfs:label "3rd+2nd + linear+2nd"; rdf:value 5];
         ] ,
         [
             a lv2:InputPort , lv2:ControlPort ;
