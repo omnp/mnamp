@@ -211,11 +211,11 @@ namespace mnamp {
             lowpass_filter_parameters.setparams(22000.0, 0.707, sr);
             for (uint32_t h = 0; h < constants::max_stages; h++) {
                 adjust[h].setparams(0.5*sr/downfilter_factor, 0.606, sr);
-                limiters[h].set_lowpass_params(0.1, 1.0, sr);
-                limiters[h].set_gain_params(0.1, 1.0, sr);
+                limiters[h].set_lowpass_params(15.0, 1.0, sr);
+                limiters[h].set_gain_params(15.0, 1.0, sr);
             }
-            main_limiter.set_lowpass_params(0.1, 1.0, sr);
-            main_limiter.set_gain_params(0.1, 1.0, sr);
+            main_limiter.set_lowpass_params(15.0, 1.0, sr);
+            main_limiter.set_gain_params(15.0, 1.0, sr);
         }
         void inline run(const uint32_t n) {
             for (uint32_t i = 0; i < constants::ports; ++i)
