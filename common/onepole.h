@@ -9,27 +9,27 @@ public:
     using type = type_;
 private:
     type a;
-    type b;
     type y;
     type s;
 public:
     explicit OnePole() {
         a = 0.0;
-        b = 1.0;
         y = 0.0;
         s = 0.0;
     }
     type const pass() const {
-        return s;
+        return y;
     }
     void process(type const x) {
-        y = b * x + a * y;
-        s = y;
+        // Based on the structure found in "The Art of VA Filter Design", V. Zavalishin.
+        type v = (x - s) * a;
+        y = s + v;
+        s = y + v;
     }
     void setparams(type k, type q, type sr) {
         type f = k/sr;
-        a = std::exp(-2.0 * M_PI * f);
-        b = 1.0 - a;
+        a = std::tan(M_PI * f);
+        a = a / (1.0 + a);
     }
     void reset() {
         y = 0.0;
