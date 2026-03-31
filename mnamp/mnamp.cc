@@ -57,7 +57,7 @@ namespace mnamp {
                 gain_ = std::fmin<type>(gain.pass(), 1.0 / std::abs(x));
             }
             type y = gain_ * x;
-            lowpass.process(std::abs(x));
+            lowpass.process(x);
             if (std::abs(lowpass.pass()) <= 0.0) {
                 gain.process(1.0);
             }
@@ -211,11 +211,11 @@ namespace mnamp {
             lowpass_filter_parameters.setparams(22000.0, 0.707, sr);
             for (uint32_t h = 0; h < constants::max_stages; h++) {
                 adjust[h].setparams(0.5*sr/downfilter_factor, 0.606, sr);
-                limiters[h].set_lowpass_params(15.0, 1.0, sr);
-                limiters[h].set_gain_params(15.0, 1.0, sr);
+                limiters[h].set_lowpass_params(200.0, 1.0, sr);
+                limiters[h].set_gain_params(1.0, 1.0, sr);
             }
-            main_limiter.set_lowpass_params(15.0, 1.0, sr);
-            main_limiter.set_gain_params(15.0, 1.0, sr);
+            main_limiter.set_lowpass_params(200.0, 1.0, sr);
+            main_limiter.set_gain_params(1.0, 1.0, sr);
         }
         void inline run(const uint32_t n) {
             for (uint32_t i = 0; i < constants::ports; ++i)
@@ -236,7 +236,7 @@ namespace mnamp {
 
             // Preprocessing
             splitter.setparams(cutoff / sr, 1.0  * 1000.0 / (1.0 + cutoff), 1.0);
-            splitter_high.setparams((6000.0 - cutoff) / sr, 1.0 * 1000.0 / (1.0 + cutoff), 1.0);
+            splitter_high.setparams((7500.0 - cutoff) / sr, 1.0 * 1000.0 / (1.0 + cutoff), 1.0);
 
             // Processing loop.
             for (uint32_t i = 0; i < n; ++i) {
@@ -259,9 +259,8 @@ namespace mnamp {
                 for (uint32_t h = 0; h < stages; ++h) {
                     t = limiters[h].process(t);
                     type a = std::abs(t);
-                    a = a/(1.0 + a);
-                    a = std::log2(2.0 - a);
-                    type level = (max_gain - gain) * a;
+                    a = 1.0 - a;
+                    type level = (max_gain - gain * a);
                     adjust[h].setparams(0.5 * sr/downfilter_factor * a, 0.606, sr);
                     adjust[h].process(t);
                     type lo = adjust[h].pass();
