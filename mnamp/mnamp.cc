@@ -257,7 +257,6 @@ namespace mnamp {
                 t = main_limiter.process(t);
 
                 for (uint32_t h = 0; h < stages; ++h) {
-                    t = limiters[h].process(t);
                     type a = std::abs(t);
                     a = 1.0 - a;
                     type level = (max_gain - gain * a);
@@ -270,6 +269,7 @@ namespace mnamp {
                     t = t * compensation;
                     highpass[h+1].process(t);
                     t = highpass[h+1].pass();
+                    t = limiters[h].process(t);
                 }
                 t = t * volume;
                 out[i] = t;
