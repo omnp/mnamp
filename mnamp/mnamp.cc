@@ -260,7 +260,7 @@ namespace mnamp {
                     type a = std::abs(t);
                     a = 1.0 - a;
                     type level = (max_gain - gain * a);
-                    adjust[h].setparams(0.5 * sr/downfilter_factor * a, 0.606, sr);
+                    adjust[h].setparams(0.5 * sr/downfilter_factor * (0.8 + 0.2 * a), 0.606, sr);
                     adjust[h].process(t);
                     type lo = adjust[h].pass();
                     t = lo;
